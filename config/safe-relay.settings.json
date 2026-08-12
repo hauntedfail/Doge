@@ -1,0 +1,31 @@
+{
+  "hostname": "127.0.0.1",
+  "port": 6900,
+  "dashboard": false,
+  "logger": {
+    "level": "info",
+    "output": {
+      "type": "stdout",
+      "prettyPrint": true
+    }
+  },
+  "profiles": [
+    {
+      "name": "g2-x-reader",
+      "home": {
+        "url": "https://x.com/home"
+      },
+      "pageReloadIntervalMinutes": 60,
+      "browser": {
+        "type": "launch",
+        "browserType": "chromium",
+        "userDataDir": "./var/relay-profile",
+        "headless": false,
+        "viewport": {
+          "width": 1100,
+          "height": 800
+        }
+      }
+    }
+  ]
+}

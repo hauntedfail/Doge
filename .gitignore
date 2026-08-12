@@ -13,6 +13,8 @@ coverage/
 
 # Runtime data: relay catalog samples can contain account-specific IDs/cursors
 var/
+# Safe Relay's dedicated Chromium profile lives under var/relay-profile.
+# It contains X cookies and local storage and must never be committed.
 playwright-profile/
 browser-profile/
 user-data-dir/

@@ -65,15 +65,35 @@ npm run pack:g2
 
 ## live X relayへ切り替える
 
-1. `twitter_api_safe_relay`を`127.0.0.1:6900`で起動し、そのブラウザでXへログインします。`3000`はこのMacのTraumaが使用中なので使いません。
-2. 現在のquery IDとfeature flagsを取得します。
-3. gatewayだけをrelay modeで起動します。
+このprojectはHeliumとは別のPlaywright Chromium profileを使います。初回だけ専用browserでXへログインし、以後は`var/relay-profile`に保存されたsessionを使います。profileにはX cookieとLocal Storageが入るため、directory全体をGitから除外しています。
+
+最初に専用Chromiumをinstallします。
+
+```bash
+npx playwright install chromium
+```
+
+Safe Relayと専用browserを起動します。
+
+```bash
+npm run relay:login
+```
+
+表示されたChromiumでXへログインし、`https://x.com/home`が表示されたらwindowを開いたままにします。別terminalで状態を確認できます。
+
+```bash
+npm run relay:check
+```
+
+続いて現在のquery IDとfeature flagsを取得し、gatewayをrelay modeで起動します。
 
 ```bash
 npm run relay:sync
 X_SOURCE=relay npm run dev:gateway
 npm run dev:g2
 ```
+
+Safe Relayは`127.0.0.1:6900`、gatewayは`127.0.0.1:8787`を使います。`3000`はこのMacのTraumaが使用中なので使いません。Safe Relayのbrowserを閉じるか`Ctrl-C`するとrelayも停止します。
 
 relay catalogはX側の変更に追従するversion lockです。`var/requests.ndjson`はaccount由来のIDやcursorを含み得るため、`.gitignore`で除外しています。gatewayは起動後もcatalogを読み直すため、同期後の再buildは不要です。
 

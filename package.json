@@ -19,6 +19,8 @@
     "pack:g2": "npm run pack --workspace @even-g2-x-reader/g2",
     "pack:g2:production": "npm run pack:production --workspace @even-g2-x-reader/g2",
     "configure:origin": "node scripts/configure-origin.mjs",
+    "relay:check": "node scripts/check-safe-relay.mjs",
+    "relay:login": "node scripts/start-safe-relay.mjs",
     "relay:sync": "node scripts/sync-relay-catalog.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -30,6 +32,7 @@
     "prettier": "^3.9.6",
     "tsup": "^8.5.0",
     "tsx": "^4.20.0",
+    "twitter-api-safe-relay": "^0.1.1",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10"
   },
@@ -37,6 +40,10 @@
     "node": ">=22"
   },
   "overrides": {
+    "twitter-api-safe-relay": {
+      ".": "$twitter-api-safe-relay",
+      "@hono/node-server": "2.1.0"
+    },
     "esbuild": "0.28.2"
   }
 }
