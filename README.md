@@ -97,6 +97,18 @@ Safe Relayは`127.0.0.1:6900`、gatewayは`127.0.0.1:8787`を使います。`300
 
 relay catalogはX側の変更に追従するversion lockです。`var/requests.ndjson`はaccount由来のIDやcursorを含み得るため、`.gitignore`で除外しています。gatewayは起動後もcatalogを読み直すため、同期後の再buildは不要です。
 
+### 認証付き実機preview
+
+Safe Relayへログイン済みで、`npm run build`と`npm run relay:sync`が完了していれば、実Xデータ用の一時previewを起動できます。
+
+```bash
+npm run preview:live
+```
+
+このcommandは256-bitの一時tokenを生成し、Bearer認証を必須にしたread-only gatewayと使い捨てCloudflare Quick Tunnelを起動します。tokenはterminalへ出力せず、権限`600`の一時QR画像にだけ埋め込みます。URL fragmentはCloudflareへ送られず、Even WebViewがsession内でtokenを取り込み、API requestのAuthorization headerへ変換します。`Ctrl-C`でgatewayとTunnelを終了し、QR画像を削除してtokenを失効させます。
+
+Quick Tunnelは実機開発専用で、可用性保証や固定URLはありません。本番運用では`h1ka.ru`のnamed TunnelとCloudflare Accessへ置き換えます。
+
 ## 外部URLを設定する（次の段階）
 
 最終subdomainが決まったら、bare HTTPS originを指定します。

@@ -5,6 +5,7 @@ import {
   type Thread,
   type TimelinePage,
 } from '@even-g2-x-reader/contracts'
+import { browserAccessToken } from './auth.js'
 
 function apiBase(): string {
   const configured = import.meta.env.VITE_API_BASE_URL?.trim()
@@ -13,10 +14,13 @@ function apiBase(): string {
 }
 
 async function get(path: string): Promise<unknown> {
+  const headers = new Headers({ accept: 'application/json' })
+  const accessToken = browserAccessToken()
+  if (accessToken) headers.set('authorization', `Bearer ${accessToken}`)
   const response = await fetch(`${apiBase()}${path}`, {
     method: 'GET',
     credentials: 'include',
-    headers: { accept: 'application/json' },
+    headers,
   })
   const json = (await response.json()) as unknown
   if (!response.ok) throw new Error(`Gateway returned HTTP ${response.status}`)
