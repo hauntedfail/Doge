@@ -1,0 +1,42 @@
+{
+  "name": "even-g2-x-reader",
+  "version": "0.1.0",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace @even-g2-x-reader/contracts && npm run build --workspace @even-g2-x-reader/gateway && npm run build --workspace @even-g2-x-reader/g2",
+    "check": "npm run check --workspaces --if-present",
+    "dev": "npm-run-all --parallel dev:gateway dev:g2",
+    "dev:g2": "npm run dev --workspace @even-g2-x-reader/g2",
+    "dev:gateway": "npm run dev --workspace @even-g2-x-reader/gateway",
+    "format": "prettier --write . --ignore-unknown",
+    "format:check": "prettier --check . --ignore-unknown",
+    "pack:g2": "npm run pack --workspace @even-g2-x-reader/g2",
+    "pack:g2:production": "npm run pack:production --workspace @even-g2-x-reader/g2",
+    "configure:origin": "node scripts/configure-origin.mjs",
+    "relay:sync": "node scripts/sync-relay-catalog.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "verify": "npm run check && npm test && npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "npm-run-all2": "^8.0.4",
+    "prettier": "^3.9.6",
+    "tsup": "^8.5.0",
+    "tsx": "^4.20.0",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "overrides": {
+    "esbuild": "0.28.2"
+  }
+}

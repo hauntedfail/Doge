@@ -1,0 +1,34 @@
+node_modules/
+dist/
+coverage/
+*.ehpk
+*.log
+.DS_Store
+
+# Local environment and credentials
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Runtime data: relay catalog samples can contain account-specific IDs/cursors
+var/
+playwright-profile/
+browser-profile/
+user-data-dir/
+
+# Tool caches and local editor state
+.vite/
+.vitest/
+.idea/
+.vscode/
+*.swp
+
+# Cloudflare Tunnel credentials and generated configuration
+.cloudflared/
+cloudflared/
+.wrangler/
+cert.pem
+*.json.credentials
+*.credentials.json
+apps/g2/app.production.json

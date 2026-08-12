@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
+    <title>G2 X Reader</title>
+  </head>
+  <body>
+    <main class="shell">
+      <header>
+        <p class="eyebrow">EVEN G2 · READ ONLY</p>
+        <h1>X Reader</h1>
+        <p id="connection" class="status">Starting…</p>
+      </header>
+      <section class="card" aria-labelledby="now-title">
+        <div class="card-heading">
+          <h2 id="now-title">Now on glasses</h2>
+          <span id="feed" class="pill">HOME</span>
+        </div>
+        <p id="author" class="author">Waiting for timeline</p>
+        <p id="post" class="post">
+          The bundled mock feed makes the full UI testable before X and Cloudflare are connected.
+        </p>
+        <p id="position" class="meta">—</p>
+      </section>
+      <section class="controls" aria-labelledby="controls-title">
+        <h2 id="controls-title">Controls</h2>
+        <div class="control-grid">
+          <span><b>Swipe up</b>Next post</span>
+          <span><b>Swipe down</b>Previous post</span>
+          <span><b>Glasses tap</b>Thread / return</span>
+          <span><b>R1 tap</b>Switch feed</span>
+          <span><b>Double tap</b>Exit</span>
+        </div>
+      </section>
+      <section class="test-panel" aria-label="Phone test controls">
+        <button type="button" data-action="previous">Previous</button>
+        <button type="button" data-action="next">Next</button>
+        <button type="button" data-action="cycle-feed">Switch feed</button>
+        <button type="button" data-action="toggle-detail">Thread</button>
+      </section>
+      <p class="privacy">The glasses app never receives X cookies or a generic relay URL.</p>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
