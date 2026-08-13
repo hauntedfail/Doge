@@ -95,6 +95,27 @@ describe('parseTimeline', () => {
       'not authorised',
     )
   })
+
+  it('reads author identity from the current X user core shape', () => {
+    const current = structuredClone(raw)
+    const result =
+      current.data.home.timeline.instructions[0]?.entries[0]?.content?.itemContent?.tweet_results
+        ?.result
+    const user = result?.tweet.core.user_results.result as
+      | {
+          core?: { name: string; screen_name: string }
+          legacy?: { name?: string; screen_name?: string }
+        }
+      | undefined
+    if (!user) throw new Error('test fixture is missing its author')
+    user.core = { name: 'Current Name', screen_name: 'current_handle' }
+    user.legacy = {}
+
+    expect(parseTimeline(current, 'home').posts[0]).toMatchObject({
+      authorName: 'Current Name',
+      authorHandle: 'current_handle',
+    })
+  })
 })
 
 describe('parseThread', () => {

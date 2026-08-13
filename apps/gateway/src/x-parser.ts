@@ -48,15 +48,18 @@ function postFromObject(candidate: JsonObject): Post | undefined {
   const legacy = objectAt(candidate, 'legacy')
   if (!id || !legacy || typeof legacy.full_text !== 'string') return undefined
 
-  const user = objectAt(candidate, 'core', 'user_results', 'result', 'legacy')
+  const user = objectAt(candidate, 'core', 'user_results', 'result')
+  const userCore = user ? objectAt(user, 'core') : undefined
+  const userLegacy = user ? objectAt(user, 'legacy') : undefined
   const note = objectAt(candidate, 'note_tweet', 'note_tweet_results', 'result')
   const views = objectAt(candidate, 'views')
   const text = stringAt(note, 'text') ?? stringAt(legacy, 'full_text') ?? ''
 
   return {
     id,
-    authorName: stringAt(user, 'name') ?? 'Unknown',
-    authorHandle: stringAt(user, 'screen_name') ?? 'unknown',
+    authorName: stringAt(userCore, 'name') ?? stringAt(userLegacy, 'name') ?? 'Unknown',
+    authorHandle:
+      stringAt(userCore, 'screen_name') ?? stringAt(userLegacy, 'screen_name') ?? 'unknown',
     text,
     createdAt: normaliseDate(stringAt(legacy, 'created_at')),
     replyCount: countAt(legacy, 'reply_count'),
