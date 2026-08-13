@@ -8,13 +8,13 @@ function isObject(value: unknown): value is JsonObject {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-function walk(value: unknown, visit: (object: JsonObject) => void): void {
+function walk(value: unknown, visit: (object: JsonObject) => boolean | void): void {
   if (Array.isArray(value)) {
     for (const item of value) walk(item, visit)
     return
   }
   if (!isObject(value)) return
-  visit(value)
+  if (visit(value) === false) return
   for (const child of Object.values(value)) walk(child, visit)
 }
 
@@ -154,6 +154,9 @@ export function assertNoGraphQlErrors(raw: unknown): void {
 function collectPosts(raw: unknown): Post[] {
   const posts = new Map<string, Post>()
   walk(raw, (object) => {
+    // X attaches this object to promoted timeline items even when the request
+    // asks for includePromotedContent=false. Skip the complete entry subtree.
+    if (isObject(object.promotedMetadata)) return false
     const result = objectAt(object, 'tweet_results', 'result')
     const candidate = result ? (objectAt(result, 'tweet') ?? result) : undefined
     const post = candidate ? postFromObject(candidate) : undefined

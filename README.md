@@ -2,7 +2,7 @@
 
 Even G2でXのHome、Following、Bookmarks、threadを読み、Like、Repost、Bookmarkを切り替えるTypeScript製アプリです。
 
-X API keyは使いません。Mac上のログイン済みブラウザを[`twitter_api_safe_relay`](https://github.com/fa0311/twitter_api_safe_relay)が操作し、このプロジェクトのgatewayが必要な結果だけを固定DTOへ変換してEven G2へ渡します。
+X API keyは使いません。Mac上のログイン済みブラウザを[`twitter_api_safe_relay`](https://github.com/fa0311/twitter_api_safe_relay)が操作し、このプロジェクトのgatewayが必要な結果だけを固定DTOへ変換してEven G2へ渡します。Xが`promotedMetadata`を付けたtimeline entryは広告として正規化前に除外します。
 
 > [!IMPORTANT]
 > `twitter_api_safe_relay`をインターネットへ直接公開しないでください。Tunnelへ接続するのはBearer認証付きgatewayだけです。write操作はLike、Repost、Bookmarkの有効化・解除だけに制限し、投稿、返信、Follow、削除などは公開しません。

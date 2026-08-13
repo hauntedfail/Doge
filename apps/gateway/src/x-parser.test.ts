@@ -133,6 +133,23 @@ describe('parseTimeline', () => {
     )
   })
 
+  it('excludes timeline entries carrying X promoted metadata', () => {
+    const promoted = structuredClone(raw)
+    const itemContent = promoted.data.home.timeline.instructions[0]?.entries[0]?.content
+      ?.itemContent as Record<string, unknown> | undefined
+    if (!itemContent) throw new Error('test fixture is missing its item content')
+    itemContent.promotedMetadata = {
+      adMetadataContainer: { isQuickPromote: false },
+      advertiser_results: { result: {} },
+    }
+
+    expect(parseTimeline(promoted, 'home')).toEqual({
+      feed: 'home',
+      posts: [],
+      nextCursor: 'next-page',
+    })
+  })
+
   it('reads author identity from the current X user core shape', () => {
     const current = structuredClone(raw)
     const result =
