@@ -47,6 +47,8 @@ G2のscrollはcontentを引っ張るnatural/inverse方式ではありません�
 
 長い本文はG2の実フォント幅に合わせてページ分割し、文字を省略しません。G2画面内には常設の操作guideを置かず、その領域も本文とview選択listに使います。画像付きポストでは本文を最後まで進めたページの直下に、縦横比を維持した画像を表示します。写真は最初の1枚、動画・animated GIFは静止posterを再生マーク付きで表示します。動画データの取得・再生は行いません。icon、投稿者画像、投稿画像はG2 bridgeへencoded PNG/JPEGのbyte列として渡します。高速にpostやviewを切り替えた場合、古いavatar取得結果は破棄し、最新renderだけをimage containerへ反映します。
 
+`apps/g2/public/doge-icon.png` はiPhone側のweb app iconと、view選択後の初回loading画面で使います。Even Hubの掲載iconには同じファイルを手動でuploadしてください。この画像だけはAGPLの対象外で、private/personal build専用です。詳細は同directoryの `doge-icon.LICENSE.md` を参照してください。
+
 ## 必要環境
 
 - Node.js 22以降

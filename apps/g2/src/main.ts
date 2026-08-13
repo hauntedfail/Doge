@@ -39,6 +39,7 @@ import {
   type LoadingProgress,
   type LoadingStage,
 } from './loading-progress.js'
+import { LOADING_LOGO_LAYOUT, LOADING_LOGO_SOURCE, shouldShowLoadingLogo } from './loading-logo.js'
 import {
   METRIC_ICON_SIZE,
   METRIC_STRIP_WIDTH,
@@ -93,6 +94,7 @@ const LOADING_TITLE_ID = 40
 const LOADING_PROGRESS_ID = 41
 const LOADING_STATUS_ID = 42
 const PROFILE_STATS_ID = 43
+const LOADING_LOGO_ID = 44
 const POSITION_NAME = 'doge_position'
 const AUTHOR_NAME = 'doge_author'
 const BODY_NAME = 'doge_body'
@@ -123,6 +125,7 @@ const LOADING_TITLE_NAME = 'doge_load_title'
 const LOADING_PROGRESS_NAME = 'doge_load_bar'
 const LOADING_STATUS_NAME = 'doge_load_state'
 const PROFILE_STATS_NAME = 'doge_prof_stats'
+const LOADING_LOGO_NAME = 'doge_load_logo'
 const AVATAR_SIZE = 48
 const AUTHOR_Y = 2
 const AVATAR_Y = 4
@@ -833,8 +836,9 @@ async function startGlasses(): Promise<void> {
   let renderedPostImageKey: string | null | undefined
   let renderedMenuSignature = ''
   let renderedMetricSignature = ''
-  let renderedPageKind: AppLayer | 'post-image' | 'loading' = 'view-select'
+  let renderedPageKind: AppLayer | 'post-image' | 'loading' | 'initial-loading' = 'view-select'
   let bridgeQueue = Promise.resolve()
+  let loadingLogoDataPromise: Promise<Uint8Array> | undefined
 
   interface AvatarData {
     bytes: Uint8Array
@@ -888,6 +892,17 @@ async function startGlasses(): Promise<void> {
       containerID: METRIC_STRIP_ID,
       containerName: METRIC_STRIP_NAME,
       zOrderIndex: 6,
+    })
+
+  const loadingLogoContainer = () =>
+    new ImageContainerProperty({
+      xPosition: LOADING_LOGO_LAYOUT.x,
+      yPosition: LOADING_LOGO_LAYOUT.y,
+      width: LOADING_LOGO_LAYOUT.width,
+      height: LOADING_LOGO_LAYOUT.height,
+      containerID: LOADING_LOGO_ID,
+      containerName: LOADING_LOGO_NAME,
+      zOrderIndex: 1,
     })
 
   const postImageTileContainers = () =>
@@ -1005,21 +1020,36 @@ async function startGlasses(): Promise<void> {
   }
 
   const loadingPage = () => {
-    const indicator = loadingIndicator(currentLoadingProgress())
+    const progress = currentLoadingProgress()
+    const indicator = loadingIndicator(progress)
+    const showLogo = shouldShowLoadingLogo(progress.operation)
     return {
-      pageKind: 'loading' as const,
+      pageKind: showLogo ? ('initial-loading' as const) : ('loading' as const),
       textObject: [
-        centredLoadingText(LOADING_TITLE_ID, LOADING_TITLE_NAME, 58, indicator.title, 1),
+        centredLoadingText(
+          LOADING_TITLE_ID,
+          LOADING_TITLE_NAME,
+          showLogo ? 126 : 58,
+          indicator.title,
+          showLogo ? 2 : 1,
+        ),
         centredLoadingText(
           LOADING_PROGRESS_ID,
           LOADING_PROGRESS_NAME,
-          116,
+          showLogo ? 174 : 116,
           indicator.progressLine,
-          2,
+          showLogo ? 3 : 2,
         ),
-        centredLoadingText(LOADING_STATUS_ID, LOADING_STATUS_NAME, 172, indicator.label, 3, 1),
+        centredLoadingText(
+          LOADING_STATUS_ID,
+          LOADING_STATUS_NAME,
+          showLogo ? 222 : 172,
+          indicator.label,
+          showLogo ? 4 : 3,
+          1,
+        ),
       ],
-      imageObject: [],
+      imageObject: showLogo ? [loadingLogoContainer()] : [],
       listObject: [],
       menuSignature: '',
       image: null,
@@ -1265,6 +1295,50 @@ async function startGlasses(): Promise<void> {
     return canvasPngBytes(canvas)
   }
 
+  const loadingLogoData = (): Promise<Uint8Array> => {
+    loadingLogoDataPromise ??= new Promise<Uint8Array>((resolve, reject) => {
+      const image = new Image()
+      image.decoding = 'async'
+      image.addEventListener(
+        'load',
+        () => {
+          const canvas = document.createElement('canvas')
+          canvas.width = LOADING_LOGO_LAYOUT.width
+          canvas.height = LOADING_LOGO_LAYOUT.height
+          const context = canvas.getContext('2d')
+          if (!context) {
+            reject(new Error('Unable to prepare the Doge loading logo'))
+            return
+          }
+          context.clearRect(0, 0, canvas.width, canvas.height)
+          context.drawImage(image, 0, 0, canvas.width, canvas.height)
+          resolve(canvasPngBytes(canvas))
+        },
+        { once: true },
+      )
+      image.addEventListener(
+        'error',
+        () => reject(new Error('Unable to load the Doge icon asset')),
+        { once: true },
+      )
+      image.src = LOADING_LOGO_SOURCE
+    })
+    return loadingLogoDataPromise
+  }
+
+  const updateLoadingLogo = async (): Promise<void> => {
+    const result = await bridge.updateImageRawData(
+      new ImageRawDataUpdate({
+        containerID: LOADING_LOGO_ID,
+        containerName: LOADING_LOGO_NAME,
+        imageData: await loadingLogoData(),
+      }),
+    )
+    if (result !== ImageRawDataUpdateResult.success) {
+      console.warn(`Doge loading logo update failed: ${result}`)
+    }
+  }
+
   const updateMenuBackground = async (): Promise<void> => {
     if (!menuOpen) return
     for (const [index, config] of ACTION_MENU_BACKGROUND_CONFIG.entries()) {
@@ -1476,7 +1550,9 @@ async function startGlasses(): Promise<void> {
   rememberTextLengths(initialPage.textObject)
   renderedMenuSignature = initialPage.menuSignature
   renderedPageKind = initialPage.pageKind
-  if (initialPage.pageKind === 'reader') {
+  if (initialPage.pageKind === 'initial-loading') {
+    await updateLoadingLogo()
+  } else if (initialPage.pageKind === 'reader') {
     const epoch = latestRenderEpoch.issue()
     await refreshReaderPageImages(initial, true, epoch)
   }
@@ -1521,7 +1597,12 @@ async function startGlasses(): Promise<void> {
       rememberTextLengths(nextPage.textObject)
       renderedMenuSignature = nextPage.menuSignature
       renderedPageKind = nextPage.pageKind
-      if (nextPage.pageKind === 'reader') {
+      if (nextPage.pageKind === 'initial-loading') {
+        await updateLoadingLogo()
+        renderedAvatarUrl = undefined
+        renderedPostImageKey = undefined
+        renderedMetricSignature = ''
+      } else if (nextPage.pageKind === 'reader') {
         await refreshReaderPageImages(sections, true, epoch)
         renderedPostImageKey = undefined
       } else if (nextPage.pageKind === 'profile') {

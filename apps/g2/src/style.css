@@ -28,6 +28,17 @@ body {
   margin: 0 auto;
   padding: max(32px, env(safe-area-inset-top)) 20px 40px;
 }
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.brand-icon {
+  width: 76px;
+  height: 76px;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
 .eyebrow {
   margin: 0 0 8px;
   color: #73f3a5;
@@ -190,6 +201,10 @@ button:active {
   margin: 22px 10px 0;
 }
 @media (max-width: 440px) {
+  .brand-icon {
+    width: 64px;
+    height: 64px;
+  }
   .control-grid {
     grid-template-columns: 1fr;
   }
