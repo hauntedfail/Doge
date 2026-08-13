@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { loadingIndicator, type LoadingStage } from './loading-progress.js'
+import { imageLoadingIndicator, loadingIndicator, type LoadingStage } from './loading-progress.js'
 
 describe('loadingIndicator', () => {
   it('shows monotonic milestone progress for observable load stages', () => {
@@ -23,5 +23,21 @@ describe('loadingIndicator', () => {
     expect(reload.progressLine).toContain('45%')
     expect(thread.title).toBe('LOADING THREAD')
     expect(thread.percent).toBeLessThan(100)
+  })
+
+  it('tracks image fetch, processing, and each sequential G2 tile transfer', () => {
+    const indicators = [
+      imageLoadingIndicator({ stage: 'requesting', target: 'Image 2/4' }),
+      imageLoadingIndicator({ stage: 'downloading', target: 'Image 2/4' }),
+      imageLoadingIndicator({ stage: 'processing', target: 'Image 2/4' }),
+      ...([0, 1, 2, 3, 4] as const).map((completedTiles) =>
+        imageLoadingIndicator({ stage: 'transferring', completedTiles, target: 'Image 2/4' }),
+      ),
+    ]
+
+    expect(indicators.map(({ percent }) => percent)).toEqual([10, 30, 50, 55, 65, 75, 85, 95])
+    expect(indicators[0]?.title).toBe('LOADING IMAGE 2/4')
+    expect(indicators.at(-1)?.label).toBe('Sending image to G2 · 4/4')
+    expect(indicators.every(({ percent }) => percent < 100)).toBe(true)
   })
 })

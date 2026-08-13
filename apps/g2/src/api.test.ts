@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { loadTimeline, type DataLoadStage } from './api.js'
+import { loadPostImage, loadTimeline, type DataLoadStage } from './api.js'
 
 const storage = {
   getItem: () => null,
@@ -7,7 +7,7 @@ const storage = {
   removeItem: () => undefined,
 }
 
-describe('timeline loading progress', () => {
+describe('API loading progress', () => {
   afterEach(() => vi.unstubAllGlobals())
 
   it('reports response and preparation milestones in order', async () => {
@@ -34,5 +34,25 @@ describe('timeline loading progress', () => {
 
     expect(page.feed).toBe('home')
     expect(stages).toEqual(['downloading', 'preparing'])
+  })
+
+  it('reports image response and body download milestones', async () => {
+    vi.stubGlobal('window', {
+      location: { hash: '', port: '5173', origin: 'http://127.0.0.1:5173' },
+      localStorage: storage,
+      sessionStorage: storage,
+    })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(new Blob(['image']))),
+    )
+    const stages: string[] = []
+
+    const image = await loadPostImage('https://pbs.twimg.com/media/example.jpg', (stage) => {
+      stages.push(stage)
+    })
+
+    expect(image.size).toBe(5)
+    expect(stages).toEqual(['downloading', 'downloaded'])
   })
 })

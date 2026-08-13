@@ -12,6 +12,8 @@ import { browserAccessToken } from './auth.js'
 
 export type DataLoadStage = 'downloading' | 'preparing'
 export type DataLoadProgress = (stage: DataLoadStage) => void | Promise<void>
+export type ImageDataLoadStage = 'downloading' | 'downloaded'
+export type ImageDataLoadProgress = (stage: ImageDataLoadStage) => void | Promise<void>
 
 function apiBase(): string {
   const configured = import.meta.env.VITE_API_BASE_URL?.trim()
@@ -52,16 +54,22 @@ export async function loadAvatarImage(url: string): Promise<Uint8Array> {
   return new Uint8Array(await response.arrayBuffer())
 }
 
-export async function loadPostImage(url: string): Promise<Blob> {
+export async function loadPostImage(
+  url: string,
+  onProgress?: ImageDataLoadProgress,
+): Promise<Blob> {
   const query = new URLSearchParams({ url })
   const response = await fetch(`${apiBase()}/api/v1/media?${query}`, {
     method: 'GET',
     credentials: 'omit',
     headers: authorisedHeaders('image/jpeg,image/png,image/webp'),
   })
+  await onProgress?.('downloading')
   if (response.status === 401) throw new Error('Access key required on this iPhone')
   if (!response.ok) throw new Error(`Media gateway returned HTTP ${response.status}`)
-  return response.blob()
+  const image = await response.blob()
+  await onProgress?.('downloaded')
+  return image
 }
 
 export async function loadTimeline(

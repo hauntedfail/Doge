@@ -25,7 +25,9 @@ import { galleryTitle, slideGalleryIndex } from './gallery.js'
 import { classifyInput, type SwipeDirection } from './input.js'
 import { LatestRenderEpoch, renderLatestImage } from './latest-image.js'
 import {
+  imageLoadingIndicator,
   loadingIndicator,
+  type ImageLoadingProgress,
   type LoadingOperation,
   type LoadingProgress,
   type LoadingStage,
@@ -74,6 +76,7 @@ const ACTION_MENU_ID = 12
 const BOOKMARK_COUNT_ID = 13
 const ACTION_MENU_BACKGROUND_BOTTOM_ID = 14
 const POST_IMAGE_INPUT_ID = 30
+const POST_IMAGE_LOADING_ID = 35
 const VIEW_TITLE_ID = 20
 const VIEW_LIST_ID = 22
 const LOADING_TITLE_ID = 40
@@ -90,6 +93,7 @@ const VIEW_COUNT_NAME = 'doge_view_num'
 const BOOKMARK_COUNT_NAME = 'doge_bm_num'
 const METRIC_STRIP_NAME = 'doge_metrics'
 const POST_IMAGE_INPUT_NAME = 'doge_img_input'
+const POST_IMAGE_LOADING_NAME = 'doge_img_load'
 const POST_IMAGE_TILE_CONFIG = [
   { containerID: 31, containerName: 'doge_img_0', dataIndex: 0 },
   { containerID: 32, containerName: 'doge_img_1', dataIndex: 1 },
@@ -177,6 +181,23 @@ function currentLoadingProgress(): LoadingProgress {
       target: feedLabel(),
     }
   )
+}
+
+function updatePhoneImageLoading(progress: ImageLoadingProgress | null): void {
+  if (!progress) {
+    updatePhone()
+    return
+  }
+  const indicator = imageLoadingIndicator(progress)
+  const connection = element('connection')
+  if (connection) {
+    connection.textContent = `${indicator.title} · ${indicator.percent}%`
+    connection.dataset.state = 'loading'
+  }
+  if (element('feed')) element('feed')!.textContent = indicator.title
+  if (element('author')) element('author')!.textContent = indicator.label
+  if (element('post')) element('post')!.textContent = indicator.progressLine
+  if (element('position')) element('position')!.textContent = `${indicator.percent}%`
 }
 
 function updatePhone(): void {
@@ -822,6 +843,16 @@ async function startGlasses(): Promise<void> {
     pageKind: 'post-image' as const,
     textObject: [
       textContainer(POST_IMAGE_INPUT_ID, POST_IMAGE_INPUT_NAME, 0, 0, 576, 288, 0, ' ', 1),
+      textContainer(
+        POST_IMAGE_LOADING_ID,
+        POST_IMAGE_LOADING_NAME,
+        96,
+        96,
+        384,
+        96,
+        5,
+        imageLoadingIndicator({ stage: 'requesting', target: 'Image' }).text,
+      ),
     ],
     imageObject: postImageTileContainers(),
     listObject: [],
@@ -833,6 +864,10 @@ async function startGlasses(): Promise<void> {
             kind: sections.postImageKind,
             layout: 'fullscreen' as const,
             title: undefined,
+            target:
+              sections.postImageCount > 1 && sections.postImageIndex !== null
+                ? `Image ${sections.postImageIndex + 1}/${sections.postImageCount}`
+                : 'Image',
           }
         : null,
   })
@@ -844,11 +879,32 @@ async function startGlasses(): Promise<void> {
       pageKind: 'gallery' as const,
       textObject: [
         textContainer(POST_IMAGE_INPUT_ID, POST_IMAGE_INPUT_NAME, 0, 0, 576, 288, 0, ' ', 1),
+        textContainer(
+          POST_IMAGE_LOADING_ID,
+          POST_IMAGE_LOADING_NAME,
+          96,
+          96,
+          384,
+          96,
+          5,
+          imageLoadingIndicator({
+            stage: 'requesting',
+            target: `Image ${galleryImageIndex + 1}/${post.images.length}`,
+          }).text,
+        ),
       ],
       imageObject: postImageTileContainers(),
       listObject: [],
       menuSignature: '',
-      image: image ? { url: image.url, kind: image.kind, layout: 'gallery' as const, title } : null,
+      image: image
+        ? {
+            url: image.url,
+            kind: image.kind,
+            layout: 'gallery' as const,
+            title,
+            target: `Image ${galleryImageIndex + 1}/${post.images.length}`,
+          }
+        : null,
     }
   }
 
@@ -986,11 +1042,14 @@ async function startGlasses(): Promise<void> {
     kind: PostImageKind,
     layout: PostImageLayout,
     title?: string,
+    onProgress?: (stage: 'downloading' | 'processing') => Promise<void>,
   ): Promise<FullscreenImageTileData> => {
     const key = `${layout}:${kind}:${title ?? ''}:${url}`
     let pending = postImageCache.get(key)
     if (!pending) {
-      pending = loadPostImage(url).then((image) => renderPostImageTiles(image, kind, layout, title))
+      pending = loadPostImage(url, async (stage) => {
+        await onProgress?.(stage === 'downloading' ? 'downloading' : 'processing')
+      }).then((image) => renderPostImageTiles(image, kind, layout, title))
       postImageCache.set(key, pending)
       if (postImageCache.size > 8) postImageCache.delete(postImageCache.keys().next().value ?? '')
     }
@@ -1003,17 +1062,46 @@ async function startGlasses(): Promise<void> {
     }
   }
 
+  const updatePostImageLoading = async (
+    progress: ImageLoadingProgress | null,
+  ): Promise<boolean> => {
+    updatePhoneImageLoading(progress)
+    const content = progress ? imageLoadingIndicator(progress).text : ''
+    const previousLength = renderedLengths.get(POST_IMAGE_LOADING_ID) ?? 0
+    const updated = await bridge.textContainerUpgrade(
+      new TextContainerUpgrade({
+        containerID: POST_IMAGE_LOADING_ID,
+        containerName: POST_IMAGE_LOADING_NAME,
+        contentOffset: 0,
+        contentLength: previousLength,
+        content,
+      }),
+    )
+    if (updated) renderedLengths.set(POST_IMAGE_LOADING_ID, content.length)
+    return updated
+  }
+
   const updatePostImage = async (
     url: string,
     kind: PostImageKind,
     layout: PostImageLayout,
     title?: string,
+    target = 'Image',
     force = false,
+    epoch?: number,
   ): Promise<void> => {
     const key = `${layout}:${kind}:${title ?? ''}:${url}`
     if (!force && renderedPostImageKey === key) return
-    const tiles = await postImageData(url, kind, layout, title)
-    for (const config of POST_IMAGE_TILE_CONFIG) {
+    const isCurrent = () => epoch === undefined || latestRenderEpoch.isCurrent(epoch)
+    await updatePostImageLoading({ stage: 'requesting', target })
+    const tiles = await postImageData(url, kind, layout, title, async (stage) => {
+      if (!isCurrent()) return
+      await updatePostImageLoading({ stage, target })
+    })
+    if (!isCurrent()) return
+    await updatePostImageLoading({ stage: 'transferring', completedTiles: 0, target })
+    for (const [index, config] of POST_IMAGE_TILE_CONFIG.entries()) {
+      if (!isCurrent()) return
       const result = await bridge.updateImageRawData(
         new ImageRawDataUpdate({
           containerID: config.containerID,
@@ -1023,10 +1111,18 @@ async function startGlasses(): Promise<void> {
       )
       if (result !== ImageRawDataUpdateResult.success) {
         console.warn(`Post image tile ${config.dataIndex + 1} update failed: ${result}`)
+        await updatePostImageLoading(null)
         return
       }
+      if (!isCurrent()) return
+      await updatePostImageLoading({
+        stage: 'transferring',
+        completedTiles: (index + 1) as 1 | 2 | 3 | 4,
+        target,
+      })
     }
     renderedPostImageKey = key
+    await updatePostImageLoading(null)
   }
 
   const rememberTextLengths = (textObject: TextContainerProperty[]): void => {
@@ -1122,7 +1218,9 @@ async function startGlasses(): Promise<void> {
           nextPage.image.kind,
           nextPage.image.layout,
           nextPage.image.title,
+          nextPage.image.target,
           true,
+          epoch,
         )
       } else {
         renderedAvatarUrl = undefined
@@ -1143,6 +1241,9 @@ async function startGlasses(): Promise<void> {
         nextPage.image.kind,
         nextPage.image.layout,
         nextPage.image.title,
+        nextPage.image.target,
+        false,
+        epoch,
       )
     }
   }
