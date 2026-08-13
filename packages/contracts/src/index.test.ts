@@ -53,7 +53,42 @@ describe('timelinePageSchema', () => {
       nextCursor: null,
     })
 
-    expect(result.posts[0]?.images[0]).toMatchObject({ width: 1200, height: 800 })
+    expect(result.posts[0]?.images[0]).toMatchObject({
+      kind: 'photo',
+      width: 1200,
+      height: 800,
+    })
+  })
+
+  it('accepts a video poster without exposing video data', () => {
+    const result = timelinePageSchema.parse({
+      feed: 'home',
+      posts: [
+        {
+          id: '1',
+          authorName: 'Ada',
+          authorHandle: 'ada',
+          authorAvatarUrl: null,
+          text: 'Video',
+          createdAt: '2026-08-12T00:00:00.000Z',
+          replyCount: 0,
+          repostCount: 0,
+          likeCount: 0,
+          viewCount: null,
+          images: [
+            {
+              kind: 'video_thumbnail',
+              url: 'https://pbs.twimg.com/ext_tw_video_thumb/42/pu/img/Poster_1.jpg',
+              width: 1920,
+              height: 1080,
+            },
+          ],
+        },
+      ],
+      nextCursor: null,
+    })
+
+    expect(result.posts[0]?.images[0]?.kind).toBe('video_thumbnail')
   })
 
   it('rejects write-like feed names and negative counts', () => {

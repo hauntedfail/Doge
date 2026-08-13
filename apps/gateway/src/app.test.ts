@@ -237,6 +237,48 @@ describe('gateway', () => {
     )
   })
 
+  it.each([
+    'https://pbs.twimg.com/ext_tw_video_thumb/42/pu/img/Poster_1.jpg',
+    'https://pbs.twimg.com/amplify_video_thumb/42/img/Poster_2.jpg',
+    'https://pbs.twimg.com/tweet_video_thumb/Poster_3.jpg',
+  ])('proxies an allowlisted X video poster path: %s', async (mediaUrl) => {
+    const image = new Uint8Array([0xff, 0xd8, 0xff, 0xd9])
+    const upstream = vi.fn(
+      async () =>
+        new Response(image, {
+          status: 200,
+          headers: { 'content-length': String(image.byteLength), 'content-type': 'image/jpeg' },
+        }),
+    )
+    vi.stubGlobal('fetch', upstream)
+    const app = createApp({ source: source(), bearerToken: 'secret', allowedOrigins: [] })
+    const response = await app.request(`/api/v1/media?url=${encodeURIComponent(mediaUrl)}`, {
+      headers: { authorization: 'Bearer secret' },
+    })
+
+    expect(response.status).toBe(200)
+    expect(upstream).toHaveBeenCalledWith(
+      new URL(mediaUrl),
+      expect.objectContaining({ redirect: 'manual' }),
+    )
+  })
+
+  it.each([
+    'https://pbs.twimg.com/ext_tw_video/42/pu/vid/640x360/video.mp4',
+    'https://pbs.twimg.com/ext_tw_video_thumb/not-a-number/pu/img/Poster.jpg',
+    'https://pbs.twimg.com/amplify_video_thumb/42/../../profile_images/1/avatar.jpg',
+  ])('rejects a non-poster media path without fetching it: %s', async (mediaUrl) => {
+    const upstream = vi.fn()
+    vi.stubGlobal('fetch', upstream)
+    const app = createApp({ source: source(), bearerToken: 'secret', allowedOrigins: [] })
+    const response = await app.request(`/api/v1/media?url=${encodeURIComponent(mediaUrl)}`, {
+      headers: { authorization: 'Bearer secret' },
+    })
+
+    expect(response.status).toBe(400)
+    expect(upstream).not.toHaveBeenCalled()
+  })
+
   it('rejects arbitrary media hosts, redirects, and oversized images', async () => {
     const app = createApp({ source: source(), bearerToken: 'secret', allowedOrigins: [] })
     const unsafe = encodeURIComponent('http://127.0.0.1:6900/health')

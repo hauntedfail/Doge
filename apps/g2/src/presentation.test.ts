@@ -17,6 +17,7 @@ describe('renderGlassesText', () => {
       viewCount: 4,
       images: [
         {
+          kind: 'video_thumbnail' as const,
           url: 'https://pbs.twimg.com/media/Example123?format=jpg&name=small',
           width: 1200,
           height: 800,
@@ -49,6 +50,7 @@ describe('renderGlassesText', () => {
     expect(finalSections.postImageUrl).toBe(
       'https://pbs.twimg.com/media/Example123?format=jpg&name=small',
     )
+    expect(finalSections.postImageKind).toBe('video_thumbnail')
     expect(sections.body).not.toMatch(/\b(?:RE|RP|LIKE|VIEW)\b/u)
   })
 })

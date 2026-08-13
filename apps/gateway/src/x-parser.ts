@@ -52,12 +52,22 @@ function imagesAt(legacy: JsonObject): Post['images'] {
   const images: Post['images'] = []
   const seen = new Set<string>()
   for (const item of media) {
-    if (!isObject(item) || item.type !== 'photo') continue
+    if (!isObject(item)) continue
+    const kind =
+      item.type === 'photo'
+        ? 'photo'
+        : item.type === 'video'
+          ? 'video_thumbnail'
+          : item.type === 'animated_gif'
+            ? 'animated_gif_thumbnail'
+            : null
+    if (!kind) continue
     const url = parseMediaUrl(stringAt(item, 'media_url_https'))
     if (!url || seen.has(url.href)) continue
     const original = objectAt(item, 'original_info')
     seen.add(url.href)
     images.push({
+      kind,
       url: url.href,
       width: positiveIntegerAt(original, 'width'),
       height: positiveIntegerAt(original, 'height'),

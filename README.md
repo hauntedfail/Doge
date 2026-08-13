@@ -37,7 +37,7 @@ twitter_api_safe_relay :6900 (localhost only)
 | R1をtap        | Home → Following → Bookmarks       |
 | double tap     | 終了確認                           |
 
-長い本文はG2の実フォント幅に合わせてページ分割し、文字を省略しません。画像付きポストでは本文を最後まで進めたページの直下に、縦横比を維持した画像を表示します。現時点ではポスト内の最初の写真1枚を表示します。
+長い本文はG2の実フォント幅に合わせてページ分割し、文字を省略しません。画像付きポストでは本文を最後まで進めたページの直下に、縦横比を維持した画像を表示します。写真は最初の1枚、動画・animated GIFは静止posterを再生マーク付きで表示します。動画データの取得・再生は行いません。
 
 ## 必要環境
 
@@ -165,7 +165,7 @@ npm run production:start
 - XのGraphQL errorをHTTP 200でも失敗として扱う
 - upstream timeout 15秒、response上限5 MB
 - avatar proxyは`pbs.twimg.com/profile_images`のHTTPS画像だけを許可し、redirect禁止、5秒timeout、512 KB上限、画像content-type必須
-- 投稿画像proxyは`pbs.twimg.com/media`のJPEG/PNG/WebPだけを許可し、redirect禁止、5秒timeout、4 MB上限、content-typeとfile signature一致を必須化
+- 投稿画像proxyは`pbs.twimg.com`の写真および動画posterの固定pathだけを許可し、redirect禁止、5秒timeout、4 MB上限、JPEG/PNG/WebPのcontent-typeとfile signature一致を必須化。`video.twimg.com`やMP4/HLSは取得しない
 - responseは固定DTOへ変換し、X cookieや内部headerをclientへ返さない
 - production responseは`no-store`、security headers付き
 - 本番gatewayはBearer token必須。tokenを`.ehpk`へ埋め込まず、各iPhoneで一度だけpair

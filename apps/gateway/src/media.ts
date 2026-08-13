@@ -1,6 +1,11 @@
 const MAX_MEDIA_BYTES = 4 * 1024 * 1024
 const ALLOWED_CONTENT_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
-const MEDIA_PATH = /^\/media\/[A-Za-z0-9_-]+(?:\.(jpe?g|png|webp))?$/iu
+const MEDIA_PATHS = [
+  /^\/media\/[A-Za-z0-9_-]+(?:\.(jpe?g|png|webp))?$/iu,
+  /^\/ext_tw_video_thumb\/\d{1,24}\/pu\/img\/[A-Za-z0-9_-]+\.(?:jpe?g|png|webp)$/iu,
+  /^\/amplify_video_thumb\/\d{1,24}\/img\/[A-Za-z0-9_-]+\.(?:jpe?g|png|webp)$/iu,
+  /^\/tweet_video_thumb\/[A-Za-z0-9_-]+\.(?:jpe?g|png|webp)$/iu,
+]
 const ALLOWED_FORMATS = new Set(['jpg', 'jpeg', 'png', 'webp'])
 const ALLOWED_NAMES = new Set(['small', 'medium', 'large', 'orig', '4096x4096'])
 
@@ -19,7 +24,7 @@ export function parseMediaUrl(value: string | undefined): URL | null {
       url.username ||
       url.password ||
       url.hash ||
-      !MEDIA_PATH.test(url.pathname)
+      !MEDIA_PATHS.some((pattern) => pattern.test(url.pathname))
     ) {
       return null
     }

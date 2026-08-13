@@ -43,12 +43,6 @@ const raw = {
                                     'https://pbs.twimg.com/media/Example123?format=jpg&name=large',
                                   original_info: { width: 1200, height: 800 },
                                 },
-                                {
-                                  type: 'video',
-                                  media_url_https:
-                                    'https://pbs.twimg.com/media/Video123?format=jpg&name=large',
-                                  original_info: { width: 1920, height: 1080 },
-                                },
                               ],
                             },
                           },
@@ -115,6 +109,7 @@ describe('parseTimeline', () => {
           viewCount: 13,
           images: [
             {
+              kind: 'photo',
               url: 'https://pbs.twimg.com/media/Example123?format=jpg&name=small',
               width: 1200,
               height: 800,
@@ -174,6 +169,43 @@ describe('parseTimeline', () => {
     media.media_url_https = 'http://127.0.0.1:6900/health'
 
     expect(parseTimeline(unsafe, 'home').posts[0]?.images).toEqual([])
+  })
+
+  it('extracts video and animated GIF poster images without video variants', () => {
+    const motion = structuredClone(raw)
+    const media =
+      motion.data.home.timeline.instructions[0]?.entries[0]?.content?.itemContent?.tweet_results
+        ?.result?.tweet.legacy.extended_entities.media
+    if (!media) throw new Error('test fixture is missing its media')
+    media.splice(
+      0,
+      media.length,
+      {
+        type: 'video',
+        media_url_https: 'https://pbs.twimg.com/amplify_video_thumb/123456789/img/Video_Poster.jpg',
+        original_info: { width: 1920, height: 1080 },
+      },
+      {
+        type: 'animated_gif',
+        media_url_https: 'https://pbs.twimg.com/tweet_video_thumb/GifPoster_1.jpg',
+        original_info: { width: 640, height: 360 },
+      },
+    )
+
+    expect(parseTimeline(motion, 'home').posts[0]?.images).toEqual([
+      {
+        kind: 'video_thumbnail',
+        url: 'https://pbs.twimg.com/amplify_video_thumb/123456789/img/Video_Poster.jpg',
+        width: 1920,
+        height: 1080,
+      },
+      {
+        kind: 'animated_gif_thumbnail',
+        url: 'https://pbs.twimg.com/tweet_video_thumb/GifPoster_1.jpg',
+        width: 640,
+        height: 360,
+      },
+    ])
   })
 })
 

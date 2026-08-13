@@ -1,4 +1,4 @@
-import type { Post } from '@even-g2-x-reader/contracts'
+import type { Post, PostImageKind } from '@even-g2-x-reader/contracts'
 import { paginatePostBody } from './post-pages.js'
 import type { ReaderState } from './reader-state.js'
 
@@ -8,6 +8,7 @@ export interface GlassesSections {
   body: string
   avatarUrl: string | null
   postImageUrl: string | null
+  postImageKind: PostImageKind | null
   metricCounts: {
     reply: string
     repost: string
@@ -60,6 +61,7 @@ function postSections(post: Post, state: ReaderState, requestedPage: number): Gl
     body: displayPage.body,
     avatarUrl: post.authorAvatarUrl,
     postImageUrl: displayPage.showsImage ? (post.images[0]?.url ?? null) : null,
+    postImageKind: displayPage.showsImage ? (post.images[0]?.kind ?? null) : null,
     metricCounts: {
       reply: compact(post.replyCount),
       repost: compact(post.repostCount),
@@ -79,6 +81,7 @@ export function renderGlassesSections(state: ReaderState, bodyPage = 0): Glasses
       body: `Unable to load the timeline.\n${clean(state.error ?? 'Unknown error')}\n\nTAP retry  R1 switch feed  DOUBLE exit`,
       avatarUrl: null,
       postImageUrl: null,
+      postImageKind: null,
       metricCounts: { reply: '', repost: '', like: '' },
       help: '',
       bodyPage: 0,
@@ -92,6 +95,7 @@ export function renderGlassesSections(state: ReaderState, bodyPage = 0): Glasses
       body: 'Loading…\n\nR1 switch feed  DOUBLE exit',
       avatarUrl: null,
       postImageUrl: null,
+      postImageKind: null,
       metricCounts: { reply: '', repost: '', like: '' },
       help: '',
       bodyPage: 0,
@@ -107,6 +111,7 @@ export function renderGlassesSections(state: ReaderState, bodyPage = 0): Glasses
         body: 'No posts found.\n\nR1 switch feed  DOUBLE exit',
         avatarUrl: null,
         postImageUrl: null,
+        postImageKind: null,
         metricCounts: { reply: '', repost: '', like: '' },
         help: '',
         bodyPage: 0,

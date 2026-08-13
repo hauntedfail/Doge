@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { containImage } from './post-image.js'
+import { containImage, isMotionThumbnail } from './post-image.js'
 
 describe('containImage', () => {
   it('letterboxes a landscape image without cropping', () => {
@@ -12,5 +12,11 @@ describe('containImage', () => {
 
   it('rejects invalid source dimensions', () => {
     expect(() => containImage(0, 1200, 288, 96)).toThrow('Invalid image dimensions')
+  })
+
+  it('marks video and animated GIF posters as motion thumbnails', () => {
+    expect(isMotionThumbnail('photo')).toBe(false)
+    expect(isMotionThumbnail('video_thumbnail')).toBe(true)
+    expect(isMotionThumbnail('animated_gif_thumbnail')).toBe(true)
   })
 })

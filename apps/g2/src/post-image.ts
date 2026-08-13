@@ -41,7 +41,31 @@ function canvasData(canvas: HTMLCanvasElement): string {
   return canvas.toDataURL('image/png').split(',', 2)[1] ?? ''
 }
 
-export function renderPostImagePlaceholder(): string {
+export function isMotionThumbnail(kind: PostImageKind): boolean {
+  return kind === 'video_thumbnail' || kind === 'animated_gif_thumbnail'
+}
+
+function drawPlayBadge(context: CanvasRenderingContext2D, kind: PostImageKind): void {
+  if (!isMotionThumbnail(kind)) return
+  const centreX = POST_IMAGE_WIDTH / 2
+  const centreY = POST_IMAGE_HEIGHT / 2
+  context.fillStyle = '#000'
+  context.strokeStyle = '#fff'
+  context.lineWidth = 2
+  context.beginPath()
+  context.arc(centreX, centreY, 20, 0, Math.PI * 2)
+  context.fill()
+  context.stroke()
+  context.fillStyle = '#fff'
+  context.beginPath()
+  context.moveTo(centreX - 6, centreY - 11)
+  context.lineTo(centreX + 12, centreY)
+  context.lineTo(centreX - 6, centreY + 11)
+  context.closePath()
+  context.fill()
+}
+
+export function renderPostImagePlaceholder(kind: PostImageKind): string {
   const canvas = document.createElement('canvas')
   canvas.width = POST_IMAGE_WIDTH
   canvas.height = POST_IMAGE_HEIGHT
@@ -59,11 +83,12 @@ export function renderPostImagePlaceholder(): string {
     context.lineTo(184, 24)
     context.lineTo(270, 78)
     context.stroke()
+    drawPlayBadge(context, kind)
   }
   return canvasData(canvas)
 }
 
-export async function renderPostImage(imageBlob: Blob): Promise<string> {
+export async function renderPostImage(imageBlob: Blob, kind: PostImageKind): Promise<string> {
   const objectUrl = URL.createObjectURL(imageBlob)
   try {
     const image = new Image()
@@ -87,8 +112,10 @@ export async function renderPostImage(imageBlob: Blob): Promise<string> {
       POST_IMAGE_HEIGHT,
     )
     context.drawImage(image, rect.x, rect.y, rect.width, rect.height)
+    drawPlayBadge(context, kind)
     return canvasData(canvas)
   } finally {
     URL.revokeObjectURL(objectUrl)
   }
 }
+import type { PostImageKind } from '@even-g2-x-reader/contracts'

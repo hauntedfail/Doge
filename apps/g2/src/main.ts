@@ -1,4 +1,5 @@
 import './style.css'
+import type { PostImageKind } from '@even-g2-x-reader/contracts'
 import {
   CreateStartUpPageContainer,
   ImageContainerProperty,
@@ -279,7 +280,7 @@ async function startGlasses(): Promise<void> {
   const avatarCache = new Map<string, Promise<ArrayBuffer>>()
   const postImageCache = new Map<string, Promise<string>>()
   let renderedAvatarUrl: string | null | undefined
-  let renderedPostImageUrl: string | null | undefined
+  let renderedPostImageKey: string | null | undefined
   let renderedHasPostImage = false
   let bridgeQueue = Promise.resolve()
 
@@ -445,36 +446,42 @@ async function startGlasses(): Promise<void> {
     }
   }
 
-  const postImageData = async (url: string): Promise<string> => {
-    let pending = postImageCache.get(url)
+  const postImageData = async (url: string, kind: PostImageKind): Promise<string> => {
+    const key = `${kind}:${url}`
+    let pending = postImageCache.get(key)
     if (!pending) {
-      pending = loadPostImage(url).then(renderPostImage)
-      postImageCache.set(url, pending)
+      pending = loadPostImage(url).then((image) => renderPostImage(image, kind))
+      postImageCache.set(key, pending)
       if (postImageCache.size > 32) postImageCache.delete(postImageCache.keys().next().value ?? '')
     }
     try {
       return await pending
     } catch (error) {
-      postImageCache.delete(url)
+      postImageCache.delete(key)
       console.warn('Unable to load post image', error)
-      return renderPostImagePlaceholder()
+      return renderPostImagePlaceholder(kind)
     }
   }
 
-  const updatePostImage = async (url: string, force = false): Promise<void> => {
-    if (!force && renderedPostImageUrl === url) return
+  const updatePostImage = async (
+    url: string,
+    kind: PostImageKind,
+    force = false,
+  ): Promise<void> => {
+    const key = `${kind}:${url}`
+    if (!force && renderedPostImageKey === key) return
     const result = await bridge.updateImageRawData(
       new ImageRawDataUpdate({
         containerID: POST_IMAGE_ID,
         containerName: POST_IMAGE_NAME,
-        imageData: await postImageData(url),
+        imageData: await postImageData(url, kind),
       }),
     )
     if (result !== ImageRawDataUpdateResult.success) {
       console.warn(`Post image update failed: ${result}`)
       return
     }
-    renderedPostImageUrl = url
+    renderedPostImageKey = key
   }
 
   const rememberTextLengths = (textObject: TextContainerProperty[]): void => {
@@ -490,8 +497,9 @@ async function startGlasses(): Promise<void> {
   ): Promise<void> => {
     await updateAvatar(sections.avatarUrl, force)
     await updateMetricStrip()
-    if (sections.postImageUrl) await updatePostImage(sections.postImageUrl, force)
-    else renderedPostImageUrl = null
+    if (sections.postImageUrl && sections.postImageKind) {
+      await updatePostImage(sections.postImageUrl, sections.postImageKind, force)
+    } else renderedPostImageKey = null
   }
 
   const initial = renderGlassesSections(state, bodyPage)
@@ -548,7 +556,9 @@ async function startGlasses(): Promise<void> {
       return
     }
     await updateAvatar(sections.avatarUrl)
-    if (sections.postImageUrl) await updatePostImage(sections.postImageUrl)
+    if (sections.postImageUrl && sections.postImageKind) {
+      await updatePostImage(sections.postImageUrl, sections.postImageKind)
+    }
   }
   updateGlasses = () => {
     const task = bridgeQueue.then(draw)

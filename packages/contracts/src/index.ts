@@ -4,11 +4,13 @@ export const feedSchema = z.enum(['home', 'following', 'bookmarks'])
 export type Feed = z.infer<typeof feedSchema>
 
 export const postImageSchema = z.object({
+  kind: z.enum(['photo', 'video_thumbnail', 'animated_gif_thumbnail']).default('photo'),
   url: z.url(),
   width: z.number().int().positive().max(32_768).nullable(),
   height: z.number().int().positive().max(32_768).nullable(),
 })
 export type PostImage = z.infer<typeof postImageSchema>
+export type PostImageKind = PostImage['kind']
 
 export const postSchema = z.object({
   id: z.string().min(1),
