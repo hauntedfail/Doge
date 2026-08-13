@@ -14,6 +14,7 @@ import {
   waitForEvenAppBridge,
   type EvenHubEvent,
 } from '@evenrealities/even_hub_sdk'
+import { getTextWidth } from '@evenrealities/pretext'
 import { loadAvatarImage, loadPostImage, loadThread, loadTimeline, setReaction } from './api.js'
 import { browserAccessToken, clearBrowserAccessToken, saveBrowserAccessToken } from './auth.js'
 import { registerBackgroundState } from './background-state.js'
@@ -73,6 +74,9 @@ const POST_IMAGE_NAME = 'doge_post_img'
 const ACTION_MENU_NAME = 'doge_actions'
 const ACTION_MENU_BACKGROUND_NAME = 'doge_action_bg'
 const VIEW_TITLE_NAME = 'doge_view_title'
+const VIEW_TITLE = 'DOGE  ·  SELECT VIEW'
+const VIEW_TITLE_WIDTH = Math.ceil(getTextWidth(VIEW_TITLE))
+const VIEW_TITLE_X = Math.floor((576 - VIEW_TITLE_WIDTH) / 2)
 const VIEW_LIST_NAME = 'doge_view_list'
 const AVATAR_SIZE = 48
 const PLAIN_METRIC_Y = 258
@@ -512,7 +516,16 @@ async function startGlasses(): Promise<void> {
   const selectionPage = () => ({
     pageKind: 'view-select' as const,
     textObject: [
-      textContainer(VIEW_TITLE_ID, VIEW_TITLE_NAME, 8, 8, 560, 34, 1, 'DOGE  ·  SELECT VIEW'),
+      textContainer(
+        VIEW_TITLE_ID,
+        VIEW_TITLE_NAME,
+        VIEW_TITLE_X,
+        8,
+        VIEW_TITLE_WIDTH,
+        34,
+        1,
+        VIEW_TITLE,
+      ),
     ],
     imageObject: [],
     listObject: [viewList()],
