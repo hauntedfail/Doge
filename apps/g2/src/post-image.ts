@@ -5,12 +5,26 @@ export const FULLSCREEN_IMAGE_WIDTH = 576
 export const FULLSCREEN_IMAGE_HEIGHT = 288
 export const FULLSCREEN_IMAGE_TILE_WIDTH = 288
 export const FULLSCREEN_IMAGE_TILE_HEIGHT = 144
+export type PostImageLayout = 'fullscreen' | 'gallery'
 
 export interface ImageRectangle {
   x: number
   y: number
   width: number
   height: number
+}
+
+export const FULLSCREEN_IMAGE_VIEWPORT: ImageRectangle = {
+  x: 0,
+  y: 0,
+  width: FULLSCREEN_IMAGE_WIDTH,
+  height: FULLSCREEN_IMAGE_HEIGHT,
+}
+export const GALLERY_IMAGE_VIEWPORT: ImageRectangle = {
+  x: 0,
+  y: 32,
+  width: FULLSCREEN_IMAGE_WIDTH,
+  height: FULLSCREEN_IMAGE_HEIGHT - 32,
 }
 
 export const FULLSCREEN_IMAGE_TILES = [
@@ -66,14 +80,44 @@ export function containImage(
   }
 }
 
+export function containImageInViewport(
+  sourceWidth: number,
+  sourceHeight: number,
+  viewport: ImageRectangle,
+): ImageRectangle {
+  const contained = containImage(sourceWidth, sourceHeight, viewport.width, viewport.height)
+  return {
+    ...contained,
+    x: viewport.x + contained.x,
+    y: viewport.y + contained.y,
+  }
+}
+
 export function isMotionThumbnail(kind: PostImageKind): boolean {
   return kind === 'video_thumbnail' || kind === 'animated_gif_thumbnail'
 }
 
-function drawPlayBadge(context: CanvasRenderingContext2D, kind: PostImageKind): void {
+function imageViewport(layout: PostImageLayout): ImageRectangle {
+  return layout === 'gallery' ? GALLERY_IMAGE_VIEWPORT : FULLSCREEN_IMAGE_VIEWPORT
+}
+
+function drawGalleryTitle(context: CanvasRenderingContext2D, title?: string): void {
+  if (!title) return
+  context.fillStyle = '#fff'
+  context.font = '20px sans-serif'
+  context.textAlign = 'center'
+  context.textBaseline = 'middle'
+  context.fillText(title, FULLSCREEN_IMAGE_WIDTH / 2, GALLERY_IMAGE_VIEWPORT.y / 2)
+}
+
+function drawPlayBadge(
+  context: CanvasRenderingContext2D,
+  kind: PostImageKind,
+  viewport: ImageRectangle,
+): void {
   if (!isMotionThumbnail(kind)) return
-  const centreX = FULLSCREEN_IMAGE_WIDTH / 2
-  const centreY = FULLSCREEN_IMAGE_HEIGHT / 2
+  const centreX = viewport.x + viewport.width / 2
+  const centreY = viewport.y + viewport.height / 2
   context.fillStyle = '#000'
   context.strokeStyle = '#fff'
   context.lineWidth = 2
@@ -118,25 +162,31 @@ function renderTiles(canvas: HTMLCanvasElement): FullscreenImageTileData {
   ]
 }
 
-export function renderPostImagePlaceholderTiles(kind: PostImageKind): FullscreenImageTileData {
+export function renderPostImagePlaceholderTiles(
+  kind: PostImageKind,
+  layout: PostImageLayout = 'fullscreen',
+  title?: string,
+): FullscreenImageTileData {
   const canvas = document.createElement('canvas')
   canvas.width = FULLSCREEN_IMAGE_WIDTH
   canvas.height = FULLSCREEN_IMAGE_HEIGHT
   const context = canvas.getContext('2d')
   if (context) {
+    const viewport = imageViewport(layout)
     context.fillStyle = '#000'
     context.fillRect(0, 0, FULLSCREEN_IMAGE_WIDTH, FULLSCREEN_IMAGE_HEIGHT)
     context.strokeStyle = '#fff'
     context.lineWidth = 2
-    context.strokeRect(1, 1, FULLSCREEN_IMAGE_WIDTH - 2, FULLSCREEN_IMAGE_HEIGHT - 2)
+    context.strokeRect(viewport.x + 1, viewport.y + 1, viewport.width - 2, viewport.height - 2)
     context.beginPath()
-    context.moveTo(36, 252)
-    context.lineTo(172, 102)
-    context.lineTo(264, 198)
-    context.lineTo(368, 72)
-    context.lineTo(540, 252)
+    context.moveTo(viewport.x + viewport.width * 0.06, viewport.y + viewport.height * 0.88)
+    context.lineTo(viewport.x + viewport.width * 0.3, viewport.y + viewport.height * 0.35)
+    context.lineTo(viewport.x + viewport.width * 0.46, viewport.y + viewport.height * 0.69)
+    context.lineTo(viewport.x + viewport.width * 0.64, viewport.y + viewport.height * 0.25)
+    context.lineTo(viewport.x + viewport.width * 0.94, viewport.y + viewport.height * 0.88)
     context.stroke()
-    drawPlayBadge(context, kind)
+    drawPlayBadge(context, kind, viewport)
+    drawGalleryTitle(context, title)
   }
   return renderTiles(canvas)
 }
@@ -144,6 +194,8 @@ export function renderPostImagePlaceholderTiles(kind: PostImageKind): Fullscreen
 export async function renderPostImageTiles(
   imageBlob: Blob,
   kind: PostImageKind,
+  layout: PostImageLayout = 'fullscreen',
+  title?: string,
 ): Promise<FullscreenImageTileData> {
   const objectUrl = URL.createObjectURL(imageBlob)
   try {
@@ -161,14 +213,11 @@ export async function renderPostImageTiles(
     context.fillRect(0, 0, FULLSCREEN_IMAGE_WIDTH, FULLSCREEN_IMAGE_HEIGHT)
     context.imageSmoothingEnabled = true
     context.imageSmoothingQuality = 'high'
-    const rect = containImage(
-      image.naturalWidth,
-      image.naturalHeight,
-      FULLSCREEN_IMAGE_WIDTH,
-      FULLSCREEN_IMAGE_HEIGHT,
-    )
+    const viewport = imageViewport(layout)
+    const rect = containImageInViewport(image.naturalWidth, image.naturalHeight, viewport)
     context.drawImage(image, rect.x, rect.y, rect.width, rect.height)
-    drawPlayBadge(context, kind)
+    drawPlayBadge(context, kind, viewport)
+    drawGalleryTitle(context, title)
     return renderTiles(canvas)
   } finally {
     URL.revokeObjectURL(objectUrl)

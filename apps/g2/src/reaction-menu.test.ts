@@ -20,6 +20,18 @@ const post = {
   viewerHasBookmarked: true,
 } satisfies Post
 
+const postWithImages = {
+  ...post,
+  images: [
+    {
+      kind: 'video_thumbnail' as const,
+      url: 'https://pbs.twimg.com/media/GalleryPoster?format=jpg&name=small',
+      width: 1920,
+      height: 1080,
+    },
+  ],
+} satisfies Post
+
 describe('reaction menu', () => {
   it('labels toggles from the viewer reaction state', () => {
     expect(reactionMenuItems(post)).toEqual([
@@ -38,5 +50,19 @@ describe('reaction menu', () => {
     expect(reactionSelection(post, 3)).toBe('thread')
     expect(reactionSelection(post, 4)).toBe('close')
     expect(reactionSelection(post, 5)).toBeNull()
+  })
+
+  it('offers Gallery only when the post contains visual media', () => {
+    expect(reactionMenuItems(postWithImages)).toEqual([
+      'Unlike',
+      'Repost',
+      'Remove bookmark',
+      'Gallery',
+      'Open thread',
+      'Close',
+    ])
+    expect(reactionSelection(postWithImages, 3)).toBe('gallery')
+    expect(reactionSelection(postWithImages, 4)).toBe('thread')
+    expect(reactionSelection(postWithImages, 5)).toBe('close')
   })
 })

@@ -1,6 +1,6 @@
 import type { Feed } from '@even-g2-x-reader/contracts'
 
-export type AppLayer = 'view-select' | 'reader'
+export type AppLayer = 'view-select' | 'reader' | 'gallery'
 
 export const VIEW_OPTIONS: ReadonlyArray<{ label: string; feed: Feed }> = [
   { label: 'Home', feed: 'home' },
@@ -12,6 +12,7 @@ export function feedForViewIndex(index: number): Feed | null {
   return VIEW_OPTIONS[index]?.feed ?? null
 }
 
-export function doubleTapDestination(layer: AppLayer): 'view-select' | 'exit' {
+export function doubleTapDestination(layer: AppLayer): 'reader' | 'view-select' | 'exit' {
+  if (layer === 'gallery') return 'reader'
   return layer === 'reader' ? 'view-select' : 'exit'
 }

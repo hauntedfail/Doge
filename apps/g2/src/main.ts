@@ -25,6 +25,7 @@ import {
   type AppLayer,
 } from './app-navigation.js'
 import { canvasPngBytes } from './image-bytes.js'
+import { galleryTitle, slideGalleryIndex } from './gallery.js'
 import { classifyInput, type InputAction } from './input.js'
 import { LatestRenderEpoch, renderLatestImage } from './latest-image.js'
 import {
@@ -44,6 +45,7 @@ import {
   renderPostImagePlaceholderTiles,
   renderPostImageTiles,
   type FullscreenImageTileData,
+  type PostImageLayout,
 } from './post-image.js'
 import { renderGlassesSections } from './presentation.js'
 import { reactionMenuItems, reactionSelection } from './reaction-menu.js'
@@ -127,6 +129,7 @@ const latestRenderEpoch = new LatestRenderEpoch()
 let stateRevision = 0
 let menuOpen = false
 let menuError: string | null = null
+let galleryImageIndex = 0
 
 function element(id: string): HTMLElement | null {
   return document.getElementById(id)
@@ -146,6 +149,23 @@ function updatePhone(): void {
     if (element('position')) element('position')!.textContent = 'Double tap here to exit Doge'
     element('pairing')?.toggleAttribute('hidden', Boolean(browserAccessToken()))
     element('forget-device')?.toggleAttribute('hidden', !browserAccessToken())
+    return
+  }
+  if (appLayer === 'gallery') {
+    if (connection) {
+      connection.textContent = 'Gallery open on G2'
+      connection.dataset.state = 'ready'
+    }
+    if (element('feed')) element('feed')!.textContent = 'GALLERY'
+    if (element('author'))
+      element('author')!.textContent = post
+        ? `${post.authorName} · @${post.authorHandle}`
+        : 'No post selected'
+    if (element('post'))
+      element('post')!.textContent = post
+        ? `Image ${galleryImageIndex + 1} of ${post.images.length}`
+        : 'No image selected'
+    if (element('position')) element('position')!.textContent = 'Double tap G2 to return'
     return
   }
   if (connection) {
@@ -207,6 +227,7 @@ async function openView(feed: (typeof VIEW_OPTIONS)[number]['feed']): Promise<vo
   appLayer = 'reader'
   menuOpen = false
   menuError = null
+  galleryImageIndex = 0
   bodyPage = 0
   state = reduceReaderState(state, { type: 'select-feed', feed })
   await loadCurrentFeed()
@@ -216,12 +237,30 @@ async function returnToViewSelection(): Promise<void> {
   appLayer = 'view-select'
   menuOpen = false
   menuError = null
+  galleryImageIndex = 0
   bodyPage = 0
   await render()
 }
 
+async function returnFromGallery(): Promise<void> {
+  appLayer = 'reader'
+  menuOpen = false
+  menuError = null
+  await render()
+}
+
 async function handleAction(action: InputAction): Promise<void> {
-  if (!action || action === 'cleanup' || action === 'double-tap' || appLayer !== 'reader') return
+  if (!action || action === 'cleanup' || action === 'double-tap') return
+  if (appLayer === 'gallery') {
+    if (action !== 'next' && action !== 'previous') return
+    const imageCount = state.posts[state.index]?.images.length ?? 0
+    const nextIndex = slideGalleryIndex(galleryImageIndex, imageCount, action)
+    if (nextIndex === galleryImageIndex) return
+    galleryImageIndex = nextIndex
+    await render()
+    return
+  }
+  if (appLayer !== 'reader') return
   if (action === 'open-menu') {
     if (state.status === 'error') {
       await loadCurrentFeed()
@@ -319,6 +358,15 @@ async function handleMenuSelection(index: number): Promise<void> {
     await handleAction('toggle-detail')
     return
   }
+  if (selection === 'gallery') {
+    const sections = renderGlassesSections(state, bodyPage)
+    galleryImageIndex = sections.postImageIndex ?? 0
+    appLayer = 'gallery'
+    menuOpen = false
+    menuError = null
+    await render()
+    return
+  }
   try {
     const result = await setReaction(post.id, selection.reaction, selection.active)
     state = reduceReaderState(state, { type: 'reaction-updated', ...result })
@@ -337,6 +385,7 @@ registerBackgroundState(
     stateRevision += 1
     state = restoreReaderSnapshot(state, saved)
     bodyPage = 0
+    galleryImageIndex = 0
     menuOpen = false
     menuError = null
     void render()
@@ -367,6 +416,7 @@ element('pairing')?.addEventListener('submit', (event) => {
   state = initialReaderState()
   appLayer = 'view-select'
   bodyPage = 0
+  galleryImageIndex = 0
   menuOpen = false
   menuError = null
   void render()
@@ -377,6 +427,7 @@ element('forget-device')?.addEventListener('click', () => {
   state = { ...initialReaderState(), status: 'error', error: 'Access key required on this iPhone' }
   appLayer = 'view-select'
   bodyPage = 0
+  galleryImageIndex = 0
   menuOpen = false
   menuError = null
   void render()
@@ -535,6 +586,7 @@ async function startGlasses(): Promise<void> {
     imageObject: [],
     listObject: [viewList()],
     menuSignature: '',
+    image: null,
   })
 
   const readerPage = (sections: ReturnType<typeof renderGlassesSections>) => {
@@ -599,10 +651,11 @@ async function startGlasses(): Promise<void> {
       ],
       listObject: menuItems.length > 0 ? [actionMenu(menuItems)] : [],
       menuSignature: menuItems.join('\u0000'),
+      image: null,
     }
   }
 
-  const postImagePage = () => ({
+  const postImagePage = (sections: ReturnType<typeof renderGlassesSections>) => ({
     pageKind: 'post-image' as const,
     textObject: [
       textContainer(POST_IMAGE_INPUT_ID, POST_IMAGE_INPUT_NAME, 0, 0, 576, 288, 0, ' ', 1),
@@ -610,11 +663,37 @@ async function startGlasses(): Promise<void> {
     imageObject: postImageTileContainers(),
     listObject: [],
     menuSignature: '',
+    image:
+      sections.postImageUrl && sections.postImageKind
+        ? {
+            url: sections.postImageUrl,
+            kind: sections.postImageKind,
+            layout: 'fullscreen' as const,
+            title: undefined,
+          }
+        : null,
   })
+
+  const galleryPage = (post: NonNullable<(typeof state.posts)[number]>) => {
+    const image = post.images[galleryImageIndex]
+    const title = galleryTitle(galleryImageIndex, post.images.length)
+    return {
+      pageKind: 'gallery' as const,
+      textObject: [
+        textContainer(POST_IMAGE_INPUT_ID, POST_IMAGE_INPUT_NAME, 0, 0, 576, 288, 0, ' ', 1),
+      ],
+      imageObject: postImageTileContainers(),
+      listObject: [],
+      menuSignature: '',
+      image: image ? { url: image.url, kind: image.kind, layout: 'gallery' as const, title } : null,
+    }
+  }
 
   const page = (sections: ReturnType<typeof renderGlassesSections>) => {
     if (appLayer === 'view-select') return selectionPage()
-    if (sections.postImageUrl && !menuOpen) return postImagePage()
+    const post = state.posts[state.index]
+    if (appLayer === 'gallery' && post?.images.length) return galleryPage(post)
+    if (sections.postImageUrl && !menuOpen) return postImagePage(sections)
     return readerPage(sections)
   }
 
@@ -741,11 +820,13 @@ async function startGlasses(): Promise<void> {
   const postImageData = async (
     url: string,
     kind: PostImageKind,
+    layout: PostImageLayout,
+    title?: string,
   ): Promise<FullscreenImageTileData> => {
-    const key = `${kind}:${url}`
+    const key = `${layout}:${kind}:${title ?? ''}:${url}`
     let pending = postImageCache.get(key)
     if (!pending) {
-      pending = loadPostImage(url).then((image) => renderPostImageTiles(image, kind))
+      pending = loadPostImage(url).then((image) => renderPostImageTiles(image, kind, layout, title))
       postImageCache.set(key, pending)
       if (postImageCache.size > 8) postImageCache.delete(postImageCache.keys().next().value ?? '')
     }
@@ -754,18 +835,20 @@ async function startGlasses(): Promise<void> {
     } catch (error) {
       postImageCache.delete(key)
       console.warn('Unable to load post image', error)
-      return renderPostImagePlaceholderTiles(kind)
+      return renderPostImagePlaceholderTiles(kind, layout, title)
     }
   }
 
   const updatePostImage = async (
     url: string,
     kind: PostImageKind,
+    layout: PostImageLayout,
+    title?: string,
     force = false,
   ): Promise<void> => {
-    const key = `${kind}:${url}`
+    const key = `${layout}:${kind}:${title ?? ''}:${url}`
     if (!force && renderedPostImageKey === key) return
-    const tiles = await postImageData(url, kind)
+    const tiles = await postImageData(url, kind, layout, title)
     for (const config of POST_IMAGE_TILE_CONFIG) {
       const result = await bridge.updateImageRawData(
         new ImageRawDataUpdate({
@@ -830,7 +913,7 @@ async function startGlasses(): Promise<void> {
     const nextPage = page(sections)
     let needsRebuild =
       nextPage.pageKind !== renderedPageKind || nextPage.menuSignature !== renderedMenuSignature
-    if (!needsRebuild && nextPage.pageKind !== 'post-image') {
+    if (!needsRebuild && nextPage.pageKind !== 'post-image' && nextPage.pageKind !== 'gallery') {
       for (const text of nextPage.textObject) {
         const containerID = text.containerID ?? 0
         const containerName = text.containerName ?? ''
@@ -867,14 +950,16 @@ async function startGlasses(): Promise<void> {
       if (nextPage.pageKind === 'reader') {
         await refreshReaderPageImages(sections, true, epoch)
         renderedPostImageKey = undefined
-      } else if (
-        nextPage.pageKind === 'post-image' &&
-        sections.postImageUrl &&
-        sections.postImageKind
-      ) {
+      } else if (nextPage.image) {
         renderedAvatarUrl = undefined
         renderedMetricSignature = ''
-        await updatePostImage(sections.postImageUrl, sections.postImageKind, true)
+        await updatePostImage(
+          nextPage.image.url,
+          nextPage.image.kind,
+          nextPage.image.layout,
+          nextPage.image.title,
+          true,
+        )
       } else {
         renderedAvatarUrl = undefined
         renderedPostImageKey = undefined
@@ -888,8 +973,13 @@ async function startGlasses(): Promise<void> {
       await updateMetricStrip()
       return
     }
-    if (nextPage.pageKind === 'post-image' && sections.postImageUrl && sections.postImageKind) {
-      await updatePostImage(sections.postImageUrl, sections.postImageKind)
+    if (nextPage.image) {
+      await updatePostImage(
+        nextPage.image.url,
+        nextPage.image.kind,
+        nextPage.image.layout,
+        nextPage.image.title,
+      )
     }
   }
   updateGlasses = (epoch) => {
@@ -904,8 +994,11 @@ async function startGlasses(): Promise<void> {
       .then(async () => {
         const action = classifyInput(event)
         if (action === 'double-tap') {
-          if (doubleTapDestination(appLayer) === 'exit') {
+          const destination = doubleTapDestination(appLayer)
+          if (destination === 'exit') {
             await bridge.shutDownPageContainer(1)
+          } else if (destination === 'reader') {
+            await returnFromGallery()
           } else {
             await returnToViewSelection()
           }

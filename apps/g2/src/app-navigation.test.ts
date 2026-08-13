@@ -15,6 +15,7 @@ describe('Doge application navigation', () => {
   })
 
   it('returns from a reader view before allowing exit at the selector', () => {
+    expect(doubleTapDestination('gallery')).toBe('reader')
     expect(doubleTapDestination('reader')).toBe('view-select')
     expect(doubleTapDestination('view-select')).toBe('exit')
   })

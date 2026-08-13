@@ -3,7 +3,9 @@ import {
   FULLSCREEN_IMAGE_HEIGHT,
   FULLSCREEN_IMAGE_TILES,
   FULLSCREEN_IMAGE_WIDTH,
+  GALLERY_IMAGE_VIEWPORT,
   containImage,
+  containImageInViewport,
   isMotionThumbnail,
 } from './post-image.js'
 
@@ -36,6 +38,21 @@ describe('containImage', () => {
     expect(FULLSCREEN_IMAGE_TILES.every((tile) => tile.width <= 288 && tile.height <= 144)).toBe(
       true,
     )
+  })
+
+  it('maximises a Gallery image below the title without changing its aspect ratio', () => {
+    expect(containImageInViewport(1200, 800, GALLERY_IMAGE_VIEWPORT)).toEqual({
+      x: 96,
+      y: 32,
+      width: 384,
+      height: 256,
+    })
+    expect(containImageInViewport(800, 1200, GALLERY_IMAGE_VIEWPORT)).toEqual({
+      x: 203,
+      y: 32,
+      width: 171,
+      height: 256,
+    })
   })
 
   it('rejects invalid source dimensions', () => {
