@@ -21,6 +21,34 @@ export interface MetricViewerState {
   viewerHasBookmarked: boolean
 }
 
+const INACTIVE_VIEWER_STATE: MetricViewerState = {
+  viewerHasLiked: false,
+  viewerHasReposted: false,
+  viewerHasBookmarked: false,
+}
+
+function metricIconVariantKey(state: MetricViewerState): number {
+  return (
+    Number(state.viewerHasLiked) |
+    (Number(state.viewerHasReposted) << 1) |
+    (Number(state.viewerHasBookmarked) << 2)
+  )
+}
+
+export function createMetricIconStripCache(
+  rasterize: (state: MetricViewerState) => Uint8Array,
+): (state: MetricViewerState) => Uint8Array {
+  const variants = new Map<number, Uint8Array>()
+  return (state) => {
+    const key = metricIconVariantKey(state)
+    const cached = variants.get(key)
+    if (cached) return cached
+    const rendered = rasterize(state)
+    variants.set(key, rendered)
+    return rendered
+  }
+}
+
 const ICON_X: Readonly<Record<MetricIconKind, number>> = {
   reply: 0,
   repost: 88,
@@ -62,13 +90,7 @@ export function renderMetricIcon(kind: MetricIconKind, active = false): Uint8Arr
   return canvasPngBytes(canvas)
 }
 
-export function renderMetricIconStrip(
-  state: MetricViewerState = {
-    viewerHasLiked: false,
-    viewerHasReposted: false,
-    viewerHasBookmarked: false,
-  },
-): Uint8Array {
+function rasterizeMetricIconStrip(state: MetricViewerState): Uint8Array {
   const canvas = document.createElement('canvas')
   canvas.width = METRIC_STRIP_WIDTH
   canvas.height = METRIC_ICON_SIZE
@@ -84,4 +106,12 @@ export function renderMetricIconStrip(
     context.restore()
   }
   return canvasPngBytes(canvas)
+}
+
+const cachedMetricIconStrip = createMetricIconStripCache(rasterizeMetricIconStrip)
+
+export function renderMetricIconStrip(
+  state: MetricViewerState = INACTIVE_VIEWER_STATE,
+): Uint8Array {
+  return cachedMetricIconStrip(state)
 }
