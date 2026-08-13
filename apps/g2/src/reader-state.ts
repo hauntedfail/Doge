@@ -33,7 +33,7 @@ export type ReaderAction =
   | { type: 'timeline-appended'; posts: Post[]; nextCursor: string | null }
   | { type: 'next' }
   | { type: 'previous' }
-  | { type: 'cycle-feed' }
+  | { type: 'select-feed'; feed: Feed }
   | { type: 'thread-loaded'; posts: Post[] }
   | { type: 'close-thread' }
   | { type: 'reaction-updated'; postId: string; reaction: Reaction; active: boolean }
@@ -126,11 +126,8 @@ export function reduceReaderState(state: ReaderState, action: ReaderAction): Rea
       return { ...state, index: clampIndex(state.index + 1, state.posts) }
     case 'previous':
       return { ...state, index: Math.max(0, state.index - 1) }
-    case 'cycle-feed': {
-      const feeds: Feed[] = ['home', 'following', 'bookmarks']
-      const next = feeds[(feeds.indexOf(state.feed) + 1) % feeds.length] ?? 'home'
-      return { ...initialReaderState(), feed: next }
-    }
+    case 'select-feed':
+      return { ...initialReaderState(), feed: action.feed }
     case 'thread-loaded':
       return {
         ...state,

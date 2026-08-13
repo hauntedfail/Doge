@@ -17,6 +17,13 @@ import {
 import { loadAvatarImage, loadPostImage, loadThread, loadTimeline, setReaction } from './api.js'
 import { browserAccessToken, clearBrowserAccessToken, saveBrowserAccessToken } from './auth.js'
 import { registerBackgroundState } from './background-state.js'
+import {
+  VIEW_OPTIONS,
+  doubleTapDestination,
+  feedForViewIndex,
+  type AppLayer,
+} from './app-navigation.js'
+import { canvasPngBytes } from './image-bytes.js'
 import { classifyInput, type InputAction } from './input.js'
 import {
   METRIC_ICON_SIZE,
@@ -52,6 +59,9 @@ const METRIC_STRIP_ID = 9
 const POST_IMAGE_ID = 10
 const ACTION_MENU_BACKGROUND_ID = 11
 const ACTION_MENU_ID = 12
+const VIEW_TITLE_ID = 20
+const VIEW_HELP_ID = 21
+const VIEW_LIST_ID = 22
 const HEADER_NAME = 'doge_header'
 const AUTHOR_NAME = 'doge_author'
 const BODY_NAME = 'doge_body'
@@ -64,6 +74,9 @@ const METRIC_STRIP_NAME = 'doge_metrics'
 const POST_IMAGE_NAME = 'doge_post_img'
 const ACTION_MENU_NAME = 'doge_actions'
 const ACTION_MENU_BACKGROUND_NAME = 'doge_action_bg'
+const VIEW_TITLE_NAME = 'doge_view_title'
+const VIEW_HELP_NAME = 'doge_view_help'
+const VIEW_LIST_NAME = 'doge_view_list'
 const AVATAR_SIZE = 48
 const PLAIN_METRIC_Y = 220
 const MEDIA_METRIC_Y = 258
@@ -103,6 +116,7 @@ const METRIC_LAYOUT: readonly MetricLayout[] = [
   },
 ]
 let state: ReaderState = initialReaderState()
+let appLayer: AppLayer = 'view-select'
 let bodyPage = 0
 let updateGlasses: (() => Promise<void>) | undefined
 let stateRevision = 0
@@ -116,6 +130,19 @@ function element(id: string): HTMLElement | null {
 function updatePhone(): void {
   const post = state.posts[state.index]
   const connection = element('connection')
+  if (appLayer === 'view-select') {
+    if (connection) {
+      connection.textContent = 'Choose a view on G2'
+      connection.dataset.state = 'ready'
+    }
+    if (element('feed')) element('feed')!.textContent = 'SELECT VIEW'
+    if (element('author')) element('author')!.textContent = 'Home · Following · Bookmarks'
+    if (element('post')) element('post')!.textContent = 'Tap a view to open its timeline.'
+    if (element('position')) element('position')!.textContent = 'Double tap here to exit Doge'
+    element('pairing')?.toggleAttribute('hidden', Boolean(browserAccessToken()))
+    element('forget-device')?.toggleAttribute('hidden', !browserAccessToken())
+    return
+  }
   if (connection) {
     connection.textContent =
       state.status === 'ready'
@@ -169,16 +196,26 @@ async function loadCurrentFeed(): Promise<void> {
   await render()
 }
 
+async function openView(feed: (typeof VIEW_OPTIONS)[number]['feed']): Promise<void> {
+  stateRevision += 1
+  appLayer = 'reader'
+  menuOpen = false
+  menuError = null
+  bodyPage = 0
+  state = reduceReaderState(state, { type: 'select-feed', feed })
+  await loadCurrentFeed()
+}
+
+async function returnToViewSelection(): Promise<void> {
+  appLayer = 'view-select'
+  menuOpen = false
+  menuError = null
+  bodyPage = 0
+  await render()
+}
+
 async function handleAction(action: InputAction): Promise<void> {
-  if (!action || action === 'cleanup' || action === 'exit') return
-  if (action === 'cycle-feed') {
-    menuOpen = false
-    menuError = null
-    bodyPage = 0
-    state = reduceReaderState(state, { type: 'cycle-feed' })
-    await loadCurrentFeed()
-    return
-  }
+  if (!action || action === 'cleanup' || action === 'double-tap' || appLayer !== 'reader') return
   if (action === 'open-menu') {
     if (state.status === 'error') {
       await loadCurrentFeed()
@@ -303,6 +340,12 @@ registerBackgroundState(
 for (const button of document.querySelectorAll<HTMLButtonElement>('button[data-action]')) {
   button.addEventListener('click', () => void handleAction(button.dataset.action as InputAction))
 }
+for (const button of document.querySelectorAll<HTMLButtonElement>('button[data-feed]')) {
+  button.addEventListener('click', () => {
+    const feed = VIEW_OPTIONS.find((option) => option.feed === button.dataset.feed)?.feed
+    if (feed) void openView(feed)
+  })
+}
 element('pairing')?.addEventListener('submit', (event) => {
   event.preventDefault()
   const input = element('access-key')
@@ -316,15 +359,17 @@ element('pairing')?.addEventListener('submit', (event) => {
   if (message) message.textContent = 'This iPhone is paired with Doge.'
   stateRevision += 1
   state = initialReaderState()
+  appLayer = 'view-select'
   bodyPage = 0
   menuOpen = false
   menuError = null
-  void loadCurrentFeed()
+  void render()
 })
 element('forget-device')?.addEventListener('click', () => {
   clearBrowserAccessToken()
   stateRevision += 1
   state = { ...initialReaderState(), status: 'error', error: 'Access key required on this iPhone' }
+  appLayer = 'view-select'
   bodyPage = 0
   menuOpen = false
   menuError = null
@@ -335,13 +380,14 @@ updatePhone()
 async function startGlasses(): Promise<void> {
   const bridge = await waitForEvenAppBridge()
   const renderedLengths = new Map<number, number>()
-  const avatarCache = new Map<string, Promise<ArrayBuffer>>()
-  const postImageCache = new Map<string, Promise<string>>()
+  const avatarCache = new Map<string, Promise<Uint8Array>>()
+  const postImageCache = new Map<string, Promise<Uint8Array>>()
   let renderedAvatarUrl: string | null | undefined
   let renderedPostImageKey: string | null | undefined
   let renderedHasPostImage = false
   let renderedMenuSignature = ''
   let renderedMetricSignature = ''
+  let renderedPageKind: AppLayer = 'view-select'
   let bridgeQueue = Promise.resolve()
 
   const textContainer = (
@@ -437,7 +483,50 @@ async function startGlasses(): Promise<void> {
       zOrderIndex: 11,
     })
 
-  const page = (sections: ReturnType<typeof renderGlassesSections>) => {
+  const viewList = () =>
+    new ListContainerProperty({
+      xPosition: 72,
+      yPosition: 58,
+      width: 432,
+      height: 168,
+      borderWidth: 2,
+      borderColor: 15,
+      borderRadius: 6,
+      paddingLength: 8,
+      containerID: VIEW_LIST_ID,
+      containerName: VIEW_LIST_NAME,
+      isEventCapture: 1,
+      zOrderIndex: 2,
+      itemContainer: new ListItemContainerProperty({
+        itemCount: VIEW_OPTIONS.length,
+        itemWidth: 0,
+        isItemSelectBorderEn: 1,
+        itemName: VIEW_OPTIONS.map((option) => option.label),
+      }),
+    })
+
+  const selectionPage = () => ({
+    pageKind: 'view-select' as const,
+    textObject: [
+      textContainer(VIEW_TITLE_ID, VIEW_TITLE_NAME, 8, 8, 560, 34, 1, 'DOGE  ·  SELECT VIEW'),
+      textContainer(
+        VIEW_HELP_ID,
+        VIEW_HELP_NAME,
+        8,
+        246,
+        560,
+        34,
+        3,
+        'SCROLL choose   TAP open   DOUBLE TAP exit',
+      ),
+    ],
+    imageObject: [],
+    listObject: [viewList()],
+    menuSignature: '',
+    hasPostImage: false,
+  })
+
+  const readerPage = (sections: ReturnType<typeof renderGlassesSections>) => {
     const hasPostImage = sections.postImageUrl !== null
     const metricY = hasPostImage ? MEDIA_METRIC_Y : PLAIN_METRIC_Y
     const textObject = [
@@ -481,6 +570,7 @@ async function startGlasses(): Promise<void> {
           ]
         : []
     return {
+      pageKind: 'reader' as const,
       textObject,
       imageObject: [
         avatarContainer(),
@@ -494,7 +584,10 @@ async function startGlasses(): Promise<void> {
     }
   }
 
-  const fallbackAvatar = (): string => {
+  const page = (sections: ReturnType<typeof renderGlassesSections>) =>
+    appLayer === 'view-select' ? selectionPage() : readerPage(sections)
+
+  const fallbackAvatar = (): Uint8Array => {
     const canvas = document.createElement('canvas')
     canvas.width = AVATAR_SIZE
     canvas.height = AVATAR_SIZE
@@ -513,10 +606,10 @@ async function startGlasses(): Promise<void> {
       context.arc(24, 42, 14, Math.PI, 0)
       context.stroke()
     }
-    return canvas.toDataURL('image/png').split(',', 2)[1] ?? ''
+    return canvasPngBytes(canvas)
   }
 
-  const menuBackgroundData = (): string => {
+  const menuBackgroundData = (): Uint8Array => {
     const canvas = document.createElement('canvas')
     canvas.width = 252
     canvas.height = 144
@@ -528,7 +621,7 @@ async function startGlasses(): Promise<void> {
       context.lineWidth = 2
       context.strokeRect(1, 1, canvas.width - 2, canvas.height - 2)
     }
-    return canvas.toDataURL('image/png').split(',', 2)[1] ?? ''
+    return canvasPngBytes(canvas)
   }
 
   const updateMenuBackground = async (): Promise<void> => {
@@ -545,7 +638,7 @@ async function startGlasses(): Promise<void> {
     }
   }
 
-  const avatarData = async (url: string | null): Promise<ArrayBuffer | string> => {
+  const avatarData = async (url: string | null): Promise<Uint8Array> => {
     if (!url) return fallbackAvatar()
     let pending = avatarCache.get(url)
     if (!pending) {
@@ -601,7 +694,7 @@ async function startGlasses(): Promise<void> {
     renderedMetricSignature = signature
   }
 
-  const postImageData = async (url: string, kind: PostImageKind): Promise<string> => {
+  const postImageData = async (url: string, kind: PostImageKind): Promise<Uint8Array> => {
     const key = `${kind}:${url}`
     let pending = postImageCache.get(key)
     if (!pending) {
@@ -676,12 +769,14 @@ async function startGlasses(): Promise<void> {
   rememberTextLengths(initialPage.textObject)
   renderedHasPostImage = initialPage.hasPostImage
   renderedMenuSignature = initialPage.menuSignature
-  await refreshPageImages(initial, true)
+  renderedPageKind = initialPage.pageKind
+  if (initialPage.pageKind === 'reader') await refreshPageImages(initial, true)
 
   const draw = async (): Promise<void> => {
     const sections = renderGlassesSections(state, bodyPage)
     const nextPage = page(sections)
     let needsRebuild =
+      nextPage.pageKind !== renderedPageKind ||
       nextPage.hasPostImage !== renderedHasPostImage ||
       nextPage.menuSignature !== renderedMenuSignature
     if (!needsRebuild) {
@@ -718,13 +813,22 @@ async function startGlasses(): Promise<void> {
       rememberTextLengths(nextPage.textObject)
       renderedHasPostImage = nextPage.hasPostImage
       renderedMenuSignature = nextPage.menuSignature
-      await refreshPageImages(sections, true)
+      renderedPageKind = nextPage.pageKind
+      if (nextPage.pageKind === 'reader') {
+        await refreshPageImages(sections, true)
+      } else {
+        renderedAvatarUrl = undefined
+        renderedPostImageKey = undefined
+        renderedMetricSignature = ''
+      }
       return
     }
-    await updateAvatar(sections.avatarUrl)
-    await updateMetricStrip()
-    if (sections.postImageUrl && sections.postImageKind) {
-      await updatePostImage(sections.postImageUrl, sections.postImageKind)
+    if (nextPage.pageKind === 'reader') {
+      await updateAvatar(sections.avatarUrl)
+      await updateMetricStrip()
+      if (sections.postImageUrl && sections.postImageKind) {
+        await updatePostImage(sections.postImageUrl, sections.postImageKind)
+      }
     }
   }
   updateGlasses = () => {
@@ -737,27 +841,39 @@ async function startGlasses(): Promise<void> {
   const unsubscribe = bridge.onEvenHubEvent((event: EvenHubEvent) => {
     queue = queue
       .then(async () => {
+        const action = classifyInput(event)
+        if (action === 'double-tap') {
+          if (doubleTapDestination(appLayer) === 'exit') {
+            await bridge.shutDownPageContainer(1)
+          } else {
+            await returnToViewSelection()
+          }
+          return
+        }
+        if (action === 'cleanup') {
+          unsubscribe()
+          return
+        }
+        if (appLayer === 'view-select') {
+          if (event.listEvent && (event.listEvent.eventType ?? 0) === 0) {
+            const feed = feedForViewIndex(event.listEvent.currentSelectItemIndex ?? 0)
+            if (feed) await openView(feed)
+          }
+          return
+        }
         if (menuOpen && event.listEvent && (event.listEvent.eventType ?? 0) === 0) {
           // Protobuf omits zero-valued scalars, so the first item arrives without an index.
           await handleMenuSelection(event.listEvent.currentSelectItemIndex ?? 0)
           return
         }
-        const action = classifyInput(event)
-        if (action === 'exit') {
-          await bridge.shutDownPageContainer(1)
-        } else if (action === 'cleanup') {
-          unsubscribe()
-        } else {
-          await handleAction(action)
-        }
+        await handleAction(action)
       })
       .catch((error: unknown) => console.error(error))
   })
-  if (state.posts.length === 0) await loadCurrentFeed()
-  else await render()
+  await render()
 }
 
 void startGlasses().catch((error: unknown) => {
   console.warn('Even Hub bridge is not available in this browser', error)
-  void loadCurrentFeed()
+  void render()
 })

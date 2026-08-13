@@ -7,12 +7,12 @@ describe('classifyInput', () => {
     expect(classifyInput({ textEvent: { eventType: 2 } })).toBe('previous')
   })
 
-  it('uses ring click for feed switching and glasses click for the action menu', () => {
-    expect(classifyInput({ sysEvent: { eventType: 0, eventSource: 2 } })).toBe('cycle-feed')
+  it('opens the action menu for a single click from either input source', () => {
+    expect(classifyInput({ sysEvent: { eventType: 0, eventSource: 2 } })).toBe('open-menu')
     expect(classifyInput({ sysEvent: { eventType: 0, eventSource: 1 } })).toBe('open-menu')
   })
 
-  it('maps any double click to exit', () => {
-    expect(classifyInput({ sysEvent: { eventType: 3, eventSource: 1 } })).toBe('exit')
+  it('leaves double-click routing to the application layer', () => {
+    expect(classifyInput({ sysEvent: { eventType: 3, eventSource: 1 } })).toBe('double-tap')
   })
 })

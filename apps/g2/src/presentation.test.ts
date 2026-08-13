@@ -55,5 +55,8 @@ describe('renderGlassesText', () => {
     )
     expect(finalSections.postImageKind).toBe('video_thumbnail')
     expect(sections.body).not.toMatch(/\b(?:RE|RP|LIKE|VIEW)\b/u)
+    expect(sections.help).toContain('DOUBLE views')
+    expect(sections.help).not.toContain('R1 feed')
+    expect(sections.help).not.toContain('DOUBLE exit')
   })
 })

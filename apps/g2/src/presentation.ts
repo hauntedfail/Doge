@@ -51,10 +51,7 @@ function postSections(post: Post, state: ReaderState, requestedPage: number): Gl
   const header = `DOGE / ${feed}    ${state.index + 1}/${state.posts.length}${pageMarker}`
   const author =
     `${clean(post.authorName)}\n@${clean(post.authorHandle)}  ${date(post.createdAt)}`.trim()
-  const help =
-    state.mode === 'thread'
-      ? 'UP next  DOWN back  TAP actions  DOUBLE exit'
-      : 'UP next  DOWN back  TAP actions  R1 feed  DOUBLE exit'
+  const help = 'UP next  DOWN back  TAP actions  DOUBLE views'
   return {
     header,
     author,
@@ -67,7 +64,7 @@ function postSections(post: Post, state: ReaderState, requestedPage: number): Gl
       repost: compact(post.repostCount),
       like: compact(post.likeCount),
     },
-    help: bodyPage < pages.length - 1 ? 'UP more  DOWN back  DOUBLE exit' : help,
+    help: bodyPage < pages.length - 1 ? 'UP more  DOWN back  DOUBLE views' : help,
     bodyPage,
     bodyPageCount: pages.length,
   }
@@ -78,7 +75,7 @@ export function renderGlassesSections(state: ReaderState, bodyPage = 0): Glasses
     return {
       header: `DOGE / ${state.feed.toUpperCase()}`,
       author: '',
-      body: `Unable to load the timeline.\n${clean(state.error ?? 'Unknown error')}\n\nTAP retry  R1 switch feed  DOUBLE exit`,
+      body: `Unable to load the timeline.\n${clean(state.error ?? 'Unknown error')}\n\nTAP retry  DOUBLE views`,
       avatarUrl: null,
       postImageUrl: null,
       postImageKind: null,
@@ -92,7 +89,7 @@ export function renderGlassesSections(state: ReaderState, bodyPage = 0): Glasses
     return {
       header: `DOGE / ${state.feed.toUpperCase()}`,
       author: '',
-      body: 'Loading…\n\nR1 switch feed  DOUBLE exit',
+      body: 'Loading…\n\nDOUBLE views',
       avatarUrl: null,
       postImageUrl: null,
       postImageKind: null,
@@ -108,7 +105,7 @@ export function renderGlassesSections(state: ReaderState, bodyPage = 0): Glasses
     : {
         header: `DOGE / ${state.feed.toUpperCase()}`,
         author: '',
-        body: 'No posts found.\n\nR1 switch feed  DOUBLE exit',
+        body: 'No posts found.\n\nDOUBLE views',
         avatarUrl: null,
         postImageUrl: null,
         postImageKind: null,

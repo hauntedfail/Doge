@@ -31,14 +31,14 @@ describe('reader state', () => {
     expect(state.index).toBe(0)
   })
 
-  it('cycles Home, Following, and Bookmarks from the ring', () => {
-    let state = initialReaderState()
-    state = reduceReaderState(state, { type: 'cycle-feed' })
-    expect(state.feed).toBe('following')
-    state = reduceReaderState(state, { type: 'cycle-feed' })
-    expect(state.feed).toBe('bookmarks')
-    state = reduceReaderState(state, { type: 'cycle-feed' })
-    expect(state.feed).toBe('home')
+  it('enters an explicitly selected view with a clean reader state', () => {
+    const loaded = reduceReaderState(initialReaderState(), {
+      type: 'timeline-loaded',
+      posts,
+      nextCursor: 'next',
+    })
+    const selected = reduceReaderState(loaded, { type: 'select-feed', feed: 'bookmarks' })
+    expect(selected).toEqual({ ...initialReaderState(), feed: 'bookmarks' })
   })
 
   it('restores only validated serialisable snapshot fields', () => {

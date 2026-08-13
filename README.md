@@ -29,17 +29,21 @@ twitter_api_safe_relay :6900 (localhost only)
 
 ## 操作
 
-| 入力           | 動作                              |
-| -------------- | --------------------------------- |
-| 上スワイプ     | 本文の続き / 読了後に次の投稿     |
-| 下スワイプ     | 本文の前ページ / 前の投稿         |
-| 右glassesをtap | 右側のaction menuを開く           |
-| menu内でscroll | Like / Repost / Bookmark / thread |
-| menu内でtap    | 選択を実行し、成功後menuを閉じる  |
-| R1をtap        | Home → Following → Bookmarks      |
-| double tap     | 終了確認                          |
+起動直後はHome、Following、Bookmarksのview選択画面です。
 
-長い本文はG2の実フォント幅に合わせてページ分割し、文字を省略しません。画像付きポストでは本文を最後まで進めたページの直下に、縦横比を維持した画像を表示します。写真は最初の1枚、動画・animated GIFは静止posterを再生マーク付きで表示します。動画データの取得・再生は行いません。
+| 場所        | 入力       | 動作                              |
+| ----------- | ---------- | --------------------------------- |
+| view選択    | scroll     | Home / Following / Bookmarks選択  |
+| view選択    | tap        | 選択したviewを開く                |
+| view選択    | double tap | Dogeを終了                        |
+| 投稿view    | 上スワイプ | 本文の続き / 読了後に次の投稿     |
+| 投稿view    | 下スワイプ | 本文の前ページ / 前の投稿         |
+| 投稿view    | tap        | 右側のaction menuを開く           |
+| 投稿view    | double tap | view選択へ戻る                    |
+| action menu | scroll     | Like / Repost / Bookmark / thread |
+| action menu | tap        | 選択を実行し、成功後menuを閉じる  |
+
+長い本文はG2の実フォント幅に合わせてページ分割し、文字を省略しません。画像付きポストでは本文を最後まで進めたページの直下に、縦横比を維持した画像を表示します。写真は最初の1枚、動画・animated GIFは静止posterを再生マーク付きで表示します。動画データの取得・再生は行いません。icon、投稿者画像、投稿画像はG2 bridgeへencoded PNG/JPEGのbyte列として渡します。
 
 ## 必要環境
 

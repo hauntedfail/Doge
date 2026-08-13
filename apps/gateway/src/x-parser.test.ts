@@ -177,6 +177,24 @@ describe('parseTimeline', () => {
     expect(parseTimeline(unsafe, 'home').posts[0]?.images).toEqual([])
   })
 
+  it('removes only the t.co token that belongs to rendered post media', () => {
+    const withLinks = structuredClone(raw)
+    const tweet =
+      withLinks.data.home.timeline.instructions[0]?.entries[0]?.content?.itemContent?.tweet_results
+        ?.result?.tweet
+    if (!tweet) throw new Error('test fixture is missing its tweet')
+    delete (tweet as { note_tweet?: unknown }).note_tweet
+    tweet.legacy.full_text = 'Keep https://example.com/read and render https://t.co/mediaToken'
+    const media = tweet.legacy.extended_entities.media[0] as
+      { url?: string; media_url_https: string } | undefined
+    if (!media) throw new Error('test fixture is missing its media')
+    media.url = 'https://t.co/mediaToken'
+
+    expect(parseTimeline(withLinks, 'home').posts[0]?.text).toBe(
+      'Keep https://example.com/read and render',
+    )
+  })
+
   it('extracts video and animated GIF poster images without video variants', () => {
     const motion = structuredClone(raw)
     const media =

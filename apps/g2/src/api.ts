@@ -35,7 +35,7 @@ async function get(path: string): Promise<unknown> {
   return json
 }
 
-export async function loadAvatarImage(url: string): Promise<ArrayBuffer> {
+export async function loadAvatarImage(url: string): Promise<Uint8Array> {
   const query = new URLSearchParams({ url })
   const response = await fetch(`${apiBase()}/api/v1/avatar?${query}`, {
     method: 'GET',
@@ -44,7 +44,7 @@ export async function loadAvatarImage(url: string): Promise<ArrayBuffer> {
   })
   if (response.status === 401) throw new Error('Access key required on this iPhone')
   if (!response.ok) throw new Error(`Avatar gateway returned HTTP ${response.status}`)
-  return response.arrayBuffer()
+  return new Uint8Array(await response.arrayBuffer())
 }
 
 export async function loadPostImage(url: string): Promise<Blob> {

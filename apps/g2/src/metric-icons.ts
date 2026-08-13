@@ -1,3 +1,5 @@
+import { canvasPngBytes } from './image-bytes.js'
+
 export const METRIC_ICON_SIZE = 28
 export const METRIC_STRIP_WIDTH = 288
 
@@ -44,12 +46,12 @@ function drawIcon(context: CanvasRenderingContext2D, kind: MetricIconKind, activ
   context.stroke(path)
 }
 
-export function renderMetricIcon(kind: MetricIconKind, active = false): string {
+export function renderMetricIcon(kind: MetricIconKind, active = false): Uint8Array {
   const canvas = document.createElement('canvas')
   canvas.width = METRIC_ICON_SIZE
   canvas.height = METRIC_ICON_SIZE
   const context = canvas.getContext('2d')
-  if (!context) return ''
+  if (!context) throw new Error('Unable to create metric icon canvas')
 
   context.fillStyle = '#000'
   context.fillRect(0, 0, METRIC_ICON_SIZE, METRIC_ICON_SIZE)
@@ -57,7 +59,7 @@ export function renderMetricIcon(kind: MetricIconKind, active = false): string {
   context.translate(2, 2)
   drawIcon(context, kind, active)
   context.restore()
-  return canvas.toDataURL('image/png').split(',', 2)[1] ?? ''
+  return canvasPngBytes(canvas)
 }
 
 export function renderMetricIconStrip(
@@ -66,12 +68,12 @@ export function renderMetricIconStrip(
     viewerHasReposted: false,
     viewerHasBookmarked: false,
   },
-): string {
+): Uint8Array {
   const canvas = document.createElement('canvas')
   canvas.width = METRIC_STRIP_WIDTH
   canvas.height = METRIC_ICON_SIZE
   const context = canvas.getContext('2d')
-  if (!context) return ''
+  if (!context) throw new Error('Unable to create metric strip canvas')
 
   context.fillStyle = '#000'
   context.fillRect(0, 0, METRIC_STRIP_WIDTH, METRIC_ICON_SIZE)
@@ -81,5 +83,5 @@ export function renderMetricIconStrip(
     drawIcon(context, kind, isActive(kind, state))
     context.restore()
   }
-  return canvas.toDataURL('image/png').split(',', 2)[1] ?? ''
+  return canvasPngBytes(canvas)
 }

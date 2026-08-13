@@ -81,6 +81,22 @@ function imagesAt(legacy: JsonObject): Post['images'] {
   return images
 }
 
+function textWithoutMediaTokens(text: string, legacy: JsonObject): string {
+  const media = objectAt(legacy, 'extended_entities')?.media
+  if (!Array.isArray(media)) return text
+
+  let visibleText = text
+  for (const item of media) {
+    if (!isObject(item)) continue
+    const token = stringAt(item, 'url')
+    if (token) visibleText = visibleText.split(token).join('')
+  }
+  return visibleText
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/[ \t]+(?=\r?\n|$)/g, '')
+    .trim()
+}
+
 function normaliseDate(value: string | undefined): string {
   if (!value) return ''
   const date = new Date(value)
@@ -98,7 +114,10 @@ function postFromObject(candidate: JsonObject): Post | undefined {
   const userAvatar = user ? objectAt(user, 'avatar') : undefined
   const note = objectAt(candidate, 'note_tweet', 'note_tweet_results', 'result')
   const views = objectAt(candidate, 'views')
-  const text = stringAt(note, 'text') ?? stringAt(legacy, 'full_text') ?? ''
+  const text = textWithoutMediaTokens(
+    stringAt(note, 'text') ?? stringAt(legacy, 'full_text') ?? '',
+    legacy,
+  )
 
   return {
     id,
