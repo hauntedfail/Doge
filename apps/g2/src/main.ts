@@ -25,6 +25,12 @@ import { galleryTitle, slideGalleryIndex } from './gallery.js'
 import { classifyInput, type SwipeDirection } from './input.js'
 import { LatestRenderEpoch, renderLatestImage } from './latest-image.js'
 import {
+  loadingIndicator,
+  type LoadingOperation,
+  type LoadingProgress,
+  type LoadingStage,
+} from './loading-progress.js'
+import {
   METRIC_ICON_SIZE,
   METRIC_STRIP_WIDTH,
   renderMetricIconStrip,
@@ -70,6 +76,9 @@ const ACTION_MENU_BACKGROUND_BOTTOM_ID = 14
 const POST_IMAGE_INPUT_ID = 30
 const VIEW_TITLE_ID = 20
 const VIEW_LIST_ID = 22
+const LOADING_TITLE_ID = 40
+const LOADING_PROGRESS_ID = 41
+const LOADING_STATUS_ID = 42
 const POSITION_NAME = 'doge_position'
 const AUTHOR_NAME = 'doge_author'
 const BODY_NAME = 'doge_body'
@@ -95,6 +104,9 @@ const VIEW_TITLE = 'DOGE  ·  SELECT VIEW'
 const VIEW_TITLE_WIDTH = Math.ceil(getTextWidth(VIEW_TITLE))
 const VIEW_TITLE_X = Math.floor((576 - VIEW_TITLE_WIDTH) / 2)
 const VIEW_LIST_NAME = 'doge_view_list'
+const LOADING_TITLE_NAME = 'doge_load_title'
+const LOADING_PROGRESS_NAME = 'doge_load_bar'
+const LOADING_STATUS_NAME = 'doge_load_state'
 const AVATAR_SIZE = 48
 const AUTHOR_Y = 2
 const AVATAR_Y = 4
@@ -145,11 +157,26 @@ let menuOpen = false
 let menuError: string | null = null
 let galleryImageIndex = 0
 let threadReturnBodyPage = 0
+let loadingProgress: LoadingProgress | null = null
 
 type ReaderCommand = SwipeDirection | 'confirm' | 'toggle-detail'
 
 function element(id: string): HTMLElement | null {
   return document.getElementById(id)
+}
+
+function feedLabel(): string {
+  return VIEW_OPTIONS.find((option) => option.feed === state.feed)?.label ?? state.feed
+}
+
+function currentLoadingProgress(): LoadingProgress {
+  return (
+    loadingProgress ?? {
+      operation: 'initial',
+      stage: 'connecting',
+      target: feedLabel(),
+    }
+  )
 }
 
 function updatePhone(): void {
@@ -185,6 +212,20 @@ function updatePhone(): void {
     if (element('position')) element('position')!.textContent = 'Double tap G2 to return'
     return
   }
+  if (state.status === 'loading') {
+    const indicator = loadingIndicator(currentLoadingProgress())
+    if (connection) {
+      connection.textContent = `${indicator.title} · ${indicator.percent}%`
+      connection.dataset.state = 'loading'
+    }
+    if (element('feed')) element('feed')!.textContent = indicator.title
+    if (element('author')) element('author')!.textContent = indicator.label
+    if (element('post')) element('post')!.textContent = indicator.progressLine
+    if (element('position')) element('position')!.textContent = `${indicator.percent}%`
+    element('pairing')?.toggleAttribute('hidden', Boolean(browserAccessToken()))
+    element('forget-device')?.toggleAttribute('hidden', !browserAccessToken())
+    return
+  }
   if (connection) {
     connection.textContent =
       state.status === 'ready'
@@ -215,22 +256,38 @@ async function render(): Promise<void> {
   await updateGlasses?.(epoch)
 }
 
-async function loadCurrentFeed(): Promise<void> {
+async function showLoadingStage(
+  operation: LoadingOperation,
+  target: string,
+  stage: LoadingStage,
+): Promise<void> {
+  loadingProgress = { operation, target, stage }
+  await render()
+}
+
+async function loadCurrentFeed(operation: LoadingOperation = 'initial'): Promise<void> {
   const revision = stateRevision
   const feed = state.feed
+  const target = feedLabel()
   bodyPage = 0
   state = reduceReaderState(state, { type: 'timeline-loading' })
-  await render()
+  await showLoadingStage(operation, target, 'connecting')
   try {
-    const page = await loadTimeline(feed)
+    const page = await loadTimeline(feed, undefined, async (stage) => {
+      if (revision !== stateRevision || feed !== state.feed) return
+      await showLoadingStage(operation, target, stage)
+    })
     if (revision !== stateRevision || feed !== state.feed) return
+    await showLoadingStage(operation, target, 'rendering')
     state = reduceReaderState(state, {
       type: 'timeline-loaded',
       posts: page.posts,
       nextCursor: page.nextCursor,
     })
+    loadingProgress = null
   } catch (error) {
     if (revision !== stateRevision || feed !== state.feed) return
+    loadingProgress = null
     state = reduceReaderState(state, {
       type: 'error',
       message: error instanceof Error ? error.message : 'Unknown error',
@@ -246,9 +303,10 @@ async function openView(feed: (typeof VIEW_OPTIONS)[number]['feed']): Promise<vo
   menuError = null
   galleryImageIndex = 0
   threadReturnBodyPage = 0
+  loadingProgress = null
   bodyPage = 0
   state = reduceReaderState(state, { type: 'select-feed', feed })
-  await loadCurrentFeed()
+  await loadCurrentFeed('initial')
 }
 
 async function returnToViewSelection(): Promise<void> {
@@ -257,6 +315,7 @@ async function returnToViewSelection(): Promise<void> {
   menuError = null
   galleryImageIndex = 0
   threadReturnBodyPage = 0
+  loadingProgress = null
   bodyPage = 0
   await render()
 }
@@ -274,11 +333,12 @@ async function reloadCurrentView(): Promise<void> {
   menuError = null
   galleryImageIndex = 0
   threadReturnBodyPage = 0
+  loadingProgress = null
   bodyPage = 0
   if (state.mode !== 'timeline') {
     state = reduceReaderState(state, { type: 'select-feed', feed: state.feed })
   }
-  await loadCurrentFeed()
+  await loadCurrentFeed('reload')
 }
 
 async function handleAction(action: ReaderCommand): Promise<void> {
@@ -294,7 +354,7 @@ async function handleAction(action: ReaderCommand): Promise<void> {
   if (appLayer !== 'reader') return
   if (action === 'confirm') {
     if (state.status === 'error') {
-      await loadCurrentFeed()
+      await loadCurrentFeed('reload')
       return
     }
     if (state.status !== 'ready' || !state.posts[state.index]) return
@@ -305,7 +365,7 @@ async function handleAction(action: ReaderCommand): Promise<void> {
   }
   if (action === 'toggle-detail') {
     if (state.status === 'error') {
-      await loadCurrentFeed()
+      await loadCurrentFeed('reload')
       return
     }
     if (state.mode === 'thread') {
@@ -319,13 +379,18 @@ async function handleAction(action: ReaderCommand): Promise<void> {
     const current = state.posts[state.index]
     if (!current) return
     state = reduceReaderState(state, { type: 'timeline-loading' })
-    await render()
+    await showLoadingStage('thread', 'Thread', 'connecting')
     try {
-      const thread = await loadThread(current.id)
+      const thread = await loadThread(current.id, async (stage) => {
+        await showLoadingStage('thread', 'Thread', stage)
+      })
+      await showLoadingStage('thread', 'Thread', 'rendering')
       state = reduceReaderState(state, { type: 'thread-loaded', posts: thread.posts })
       threadReturnBodyPage = bodyPage
       bodyPage = 0
+      loadingProgress = null
     } catch (error) {
+      loadingProgress = null
       state = reduceReaderState(state, {
         type: 'error',
         message: error instanceof Error ? error.message : 'Unknown error',
@@ -432,6 +497,7 @@ registerBackgroundState(
     bodyPage = 0
     galleryImageIndex = 0
     threadReturnBodyPage = 0
+    loadingProgress = null
     menuOpen = false
     menuError = null
     void render()
@@ -464,6 +530,7 @@ element('pairing')?.addEventListener('submit', (event) => {
   bodyPage = 0
   galleryImageIndex = 0
   threadReturnBodyPage = 0
+  loadingProgress = null
   menuOpen = false
   menuError = null
   void render()
@@ -476,6 +543,7 @@ element('forget-device')?.addEventListener('click', () => {
   bodyPage = 0
   galleryImageIndex = 0
   threadReturnBodyPage = 0
+  loadingProgress = null
   menuOpen = false
   menuError = null
   void render()
@@ -491,7 +559,7 @@ async function startGlasses(): Promise<void> {
   let renderedPostImageKey: string | null | undefined
   let renderedMenuSignature = ''
   let renderedMetricSignature = ''
-  let renderedPageKind: AppLayer | 'post-image' = 'view-select'
+  let renderedPageKind: AppLayer | 'post-image' | 'loading' = 'view-select'
   let bridgeQueue = Promise.resolve()
 
   interface AvatarData {
@@ -640,6 +708,50 @@ async function startGlasses(): Promise<void> {
     image: null,
   })
 
+  const centredLoadingText = (
+    containerID: number,
+    containerName: string,
+    yPosition: number,
+    content: string,
+    zOrderIndex: number,
+    isEventCapture = 0,
+  ) => {
+    const width = Math.min(560, Math.max(20, Math.ceil(getTextWidth(content))))
+    return textContainer(
+      containerID,
+      containerName,
+      Math.floor((576 - width) / 2),
+      yPosition,
+      width,
+      36,
+      zOrderIndex,
+      content,
+      isEventCapture,
+    )
+  }
+
+  const loadingPage = () => {
+    const indicator = loadingIndicator(currentLoadingProgress())
+    return {
+      pageKind: 'loading' as const,
+      textObject: [
+        centredLoadingText(LOADING_TITLE_ID, LOADING_TITLE_NAME, 58, indicator.title, 1),
+        centredLoadingText(
+          LOADING_PROGRESS_ID,
+          LOADING_PROGRESS_NAME,
+          116,
+          indicator.progressLine,
+          2,
+        ),
+        centredLoadingText(LOADING_STATUS_ID, LOADING_STATUS_NAME, 172, indicator.label, 3, 1),
+      ],
+      imageObject: [],
+      listObject: [],
+      menuSignature: '',
+      image: null,
+    }
+  }
+
   const readerPage = (sections: ReturnType<typeof renderGlassesSections>) => {
     const post = state.posts[state.index]
     const menuItems =
@@ -742,6 +854,7 @@ async function startGlasses(): Promise<void> {
 
   const page = (sections: ReturnType<typeof renderGlassesSections>) => {
     if (appLayer === 'view-select') return selectionPage()
+    if (state.status === 'loading') return loadingPage()
     const post = state.posts[state.index]
     if (appLayer === 'gallery' && post?.images.length) return galleryPage(post)
     if (sections.postImageUrl && !menuOpen) return postImagePage(sections)
@@ -935,7 +1048,7 @@ async function startGlasses(): Promise<void> {
     await updateMenuBackground()
   }
 
-  const initial = renderGlassesSections(state, bodyPage)
+  const initial = renderGlassesSections(state, bodyPage, loadingProgress ?? undefined)
   const initialPage = page(initial)
   const result = await bridge.createStartUpPageContainer(
     new CreateStartUpPageContainer({
@@ -960,7 +1073,7 @@ async function startGlasses(): Promise<void> {
 
   const draw = async (epoch: number): Promise<void> => {
     if (!latestRenderEpoch.isCurrent(epoch)) return
-    const sections = renderGlassesSections(state, bodyPage)
+    const sections = renderGlassesSections(state, bodyPage, loadingProgress ?? undefined)
     const nextPage = page(sections)
     let needsRebuild =
       nextPage.pageKind !== renderedPageKind || nextPage.menuSignature !== renderedMenuSignature

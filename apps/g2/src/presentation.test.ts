@@ -82,15 +82,21 @@ describe('renderGlassesText', () => {
     expect(output).not.toMatch(/(?:UP|DOWN|TAP|DOUBLE) (?:next|back|actions|views|exit)/u)
   })
 
-  it('does not spend loading or error pages on control hints', () => {
-    const loading = renderGlassesSections(initialReaderState())
+  it('shows staged loading progress without spending the page on control hints', () => {
+    const loading = renderGlassesSections(initialReaderState(), 0, {
+      operation: 'reload',
+      stage: 'downloading',
+      target: 'Home',
+    })
     const failed = renderGlassesSections({
       ...initialReaderState(),
       status: 'error',
       error: 'offline',
     })
 
-    expect(loading.body).toBe('Loading…')
+    expect(loading.body).toContain('RELOADING HOME')
+    expect(loading.body).toContain('45%')
+    expect(loading.body).toContain('Receiving posts')
     expect(failed.body).toBe('Unable to load the timeline.\noffline')
   })
 })

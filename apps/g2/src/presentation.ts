@@ -1,4 +1,5 @@
 import type { Post, PostImageKind } from '@even-g2-x-reader/contracts'
+import { loadingIndicator, type LoadingProgress } from './loading-progress.js'
 import { scrollPostBody } from './post-pages.js'
 import type { ReaderState } from './reader-state.js'
 
@@ -78,7 +79,11 @@ function postSections(post: Post, state: ReaderState, requestedPosition: number)
   }
 }
 
-export function renderGlassesSections(state: ReaderState, bodyPage = 0): GlassesSections {
+export function renderGlassesSections(
+  state: ReaderState,
+  bodyPage = 0,
+  loadingProgress?: LoadingProgress,
+): GlassesSections {
   if (state.status === 'error') {
     return {
       position: '',
@@ -94,11 +99,14 @@ export function renderGlassesSections(state: ReaderState, bodyPage = 0): Glasses
       bodyPageCount: 1,
     }
   }
-  if (state.status === 'loading' && state.posts.length === 0) {
+  if (state.status === 'loading') {
+    const indicator = loadingIndicator(
+      loadingProgress ?? { operation: 'initial', stage: 'connecting', target: state.feed },
+    )
     return {
       position: '',
       author: '',
-      body: 'Loading…',
+      body: indicator.text,
       avatarUrl: null,
       postImageUrl: null,
       postImageKind: null,

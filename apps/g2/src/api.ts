@@ -10,6 +10,9 @@ import {
 } from '@even-g2-x-reader/contracts'
 import { browserAccessToken } from './auth.js'
 
+export type DataLoadStage = 'downloading' | 'preparing'
+export type DataLoadProgress = (stage: DataLoadStage) => void | Promise<void>
+
 function apiBase(): string {
   const configured = import.meta.env.VITE_API_BASE_URL?.trim()
   if (configured) return configured.replace(/\/$/u, '')
@@ -23,15 +26,17 @@ function authorisedHeaders(accept: string): Headers {
   return headers
 }
 
-async function get(path: string): Promise<unknown> {
+async function get(path: string, onProgress?: DataLoadProgress): Promise<unknown> {
   const response = await fetch(`${apiBase()}${path}`, {
     method: 'GET',
     credentials: 'omit',
     headers: authorisedHeaders('application/json'),
   })
+  await onProgress?.('downloading')
   const json = (await response.json()) as unknown
   if (response.status === 401) throw new Error('Access key required on this iPhone')
   if (!response.ok) throw new Error(`Gateway returned HTTP ${response.status}`)
+  await onProgress?.('preparing')
   return json
 }
 
@@ -59,17 +64,23 @@ export async function loadPostImage(url: string): Promise<Blob> {
   return response.blob()
 }
 
-export async function loadTimeline(feed: Feed, cursor?: string): Promise<TimelinePage> {
+export async function loadTimeline(
+  feed: Feed,
+  cursor?: string,
+  onProgress?: DataLoadProgress,
+): Promise<TimelinePage> {
   const query = new URLSearchParams({ feed })
   if (cursor) query.set('cursor', cursor)
-  return timelinePageSchema.parse(await get(`/api/v1/timeline?${query}`))
+  return timelinePageSchema.parse(await get(`/api/v1/timeline?${query}`, onProgress))
 }
 
-export async function loadThread(postId: string): Promise<Thread> {
+export async function loadThread(postId: string, onProgress?: DataLoadProgress): Promise<Thread> {
   if (!/^\d{1,24}$/u.test(postId)) {
     throw new Error('Invalid post ID')
   }
-  return threadSchema.parse(await get(`/api/v1/posts/${encodeURIComponent(postId)}/thread`))
+  return threadSchema.parse(
+    await get(`/api/v1/posts/${encodeURIComponent(postId)}/thread`, onProgress),
+  )
 }
 
 export async function setReaction(
