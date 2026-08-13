@@ -26,6 +26,12 @@ describe('renderGlassesText', () => {
           width: 1200,
           height: 800,
         },
+        {
+          kind: 'photo' as const,
+          url: 'https://pbs.twimg.com/media/Example456?format=jpg&name=small',
+          width: 800,
+          height: 1200,
+        },
       ],
     }
     const state = reduceReaderState(initialReaderState(), {
@@ -45,6 +51,8 @@ describe('renderGlassesText', () => {
       author: expect.stringContaining('@ada'),
       avatarUrl: 'https://pbs.twimg.com/profile_images/1/ada_normal.jpg',
       postImageUrl: null,
+      postImageIndex: null,
+      postImageCount: 2,
       metricCounts: {
         reply: '1',
         repost: '2',
@@ -53,11 +61,20 @@ describe('renderGlassesText', () => {
         bookmark: '5',
       },
     })
-    const finalSections = renderGlassesSections(state, sections.bodyPageCount - 1)
-    expect(finalSections.postImageUrl).toBe(
+    const firstImageSections = renderGlassesSections(state, sections.bodyPageCount - 2)
+    expect(firstImageSections.postImageUrl).toBe(
       'https://pbs.twimg.com/media/Example123?format=jpg&name=small',
     )
-    expect(finalSections.postImageKind).toBe('video_thumbnail')
+    expect(firstImageSections.postImageKind).toBe('video_thumbnail')
+    expect(firstImageSections.postImageIndex).toBe(0)
+    const finalSections = renderGlassesSections(state, sections.bodyPageCount - 1)
+    expect(finalSections).toMatchObject({
+      postImageUrl: 'https://pbs.twimg.com/media/Example456?format=jpg&name=small',
+      postImageKind: 'photo',
+      postImageIndex: 1,
+      postImageCount: 2,
+      body: '',
+    })
     expect(sections.bodyPageCount).toBeGreaterThan(2)
     expect(sections.body).not.toMatch(/\b(?:RE|RP|LIKE|VIEW)\b/u)
     expect(sections).not.toHaveProperty('header')

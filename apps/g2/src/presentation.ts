@@ -9,6 +9,8 @@ export interface GlassesSections {
   avatarUrl: string | null
   postImageUrl: string | null
   postImageKind: PostImageKind | null
+  postImageIndex: number | null
+  postImageCount: number
   metricCounts: {
     reply: string
     repost: string
@@ -48,9 +50,11 @@ function date(value: string): string {
 }
 
 function postSections(post: Post, state: ReaderState, requestedPosition: number): GlassesSections {
-  const frames = scrollPostBody(clean(post.text), post.images.length > 0)
+  const frames = scrollPostBody(clean(post.text), post.images.length)
   const bodyPage = Math.min(Math.max(0, requestedPosition), frames.length - 1)
-  const displayFrame = frames[bodyPage] ?? { body: '', showsImage: false }
+  const displayFrame = frames[bodyPage] ?? { body: '', imageIndex: null }
+  const postImage =
+    displayFrame.imageIndex === null ? undefined : post.images[displayFrame.imageIndex]
   const author =
     `${clean(post.authorName)}\n@${clean(post.authorHandle)}  ${date(post.createdAt)}`.trim()
   return {
@@ -58,8 +62,10 @@ function postSections(post: Post, state: ReaderState, requestedPosition: number)
     author,
     body: displayFrame.body,
     avatarUrl: post.authorAvatarUrl,
-    postImageUrl: displayFrame.showsImage ? (post.images[0]?.url ?? null) : null,
-    postImageKind: displayFrame.showsImage ? (post.images[0]?.kind ?? null) : null,
+    postImageUrl: postImage?.url ?? null,
+    postImageKind: postImage?.kind ?? null,
+    postImageIndex: displayFrame.imageIndex,
+    postImageCount: post.images.length,
     metricCounts: {
       reply: compact(post.replyCount),
       repost: compact(post.repostCount),
@@ -81,6 +87,8 @@ export function renderGlassesSections(state: ReaderState, bodyPage = 0): Glasses
       avatarUrl: null,
       postImageUrl: null,
       postImageKind: null,
+      postImageIndex: null,
+      postImageCount: 0,
       metricCounts: { reply: '', repost: '', like: '', view: '', bookmark: '' },
       bodyPage: 0,
       bodyPageCount: 1,
@@ -94,6 +102,8 @@ export function renderGlassesSections(state: ReaderState, bodyPage = 0): Glasses
       avatarUrl: null,
       postImageUrl: null,
       postImageKind: null,
+      postImageIndex: null,
+      postImageCount: 0,
       metricCounts: { reply: '', repost: '', like: '', view: '', bookmark: '' },
       bodyPage: 0,
       bodyPageCount: 1,
@@ -109,6 +119,8 @@ export function renderGlassesSections(state: ReaderState, bodyPage = 0): Glasses
         avatarUrl: null,
         postImageUrl: null,
         postImageKind: null,
+        postImageIndex: null,
+        postImageCount: 0,
         metricCounts: { reply: '', repost: '', like: '', view: '', bookmark: '' },
         bodyPage: 0,
         bodyPageCount: 1,

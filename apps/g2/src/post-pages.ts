@@ -2,11 +2,10 @@ import { getTextWidth, measureTextWrap } from '@evenrealities/pretext'
 
 export const POST_BODY_WIDTH = 560
 export const PLAIN_BODY_LINES = 7
-export const MEDIA_BODY_LINES = 3
 
 export interface PostDisplayFrame {
   body: string
-  showsImage: boolean
+  imageIndex: number | null
 }
 
 function isBreakable(character: string): boolean {
@@ -100,17 +99,20 @@ function rollingTextFrames(lines: string[]): PostDisplayFrame[] {
       if (measureTextWrap(candidate, POST_BODY_WIDTH).lineCount > PLAIN_BODY_LINES) break
       body = candidate
     }
-    frames.push({ body, showsImage: false })
+    frames.push({ body, imageIndex: null })
     const remaining = lines.slice(start).join('')
     if (measureTextWrap(remaining, POST_BODY_WIDTH).lineCount <= PLAIN_BODY_LINES) break
   }
   return frames
 }
 
-export function scrollPostBody(text: string, hasImage: boolean): PostDisplayFrame[] {
+export function scrollPostBody(text: string, imageCount: number): PostDisplayFrame[] {
+  if (!Number.isInteger(imageCount) || imageCount < 0 || imageCount > 4) {
+    throw new Error('Image count must be an integer from 0 to 4')
+  }
   const lines = splitPostBodyLines(text)
-  if (!hasImage) return rollingTextFrames(lines)
-  const mediaFrame = { body: lines.slice(-MEDIA_BODY_LINES).join(''), showsImage: true }
-  if (lines.length <= MEDIA_BODY_LINES) return [mediaFrame]
-  return [...rollingTextFrames(lines), mediaFrame]
+  return [
+    ...rollingTextFrames(lines),
+    ...Array.from({ length: imageCount }, (_, imageIndex) => ({ body: '', imageIndex })),
+  ]
 }

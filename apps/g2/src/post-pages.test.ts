@@ -1,7 +1,6 @@
 import { measureTextWrap } from '@evenrealities/pretext'
 import { describe, expect, it } from 'vitest'
 import {
-  MEDIA_BODY_LINES,
   PLAIN_BODY_LINES,
   POST_BODY_WIDTH,
   scrollPostBody,
@@ -11,13 +10,12 @@ import {
 describe('scrollPostBody', () => {
   it('uses the removed header space for seven text lines', () => {
     expect(PLAIN_BODY_LINES).toBe(7)
-    expect(MEDIA_BODY_LINES).toBe(3)
   })
 
   it('preserves every character while moving the viewport by one visual line', () => {
     const body = '日本語とEnglish wordsを混ぜた長い本文。'.repeat(80)
     const lines = splitPostBodyLines(body)
-    const frames = scrollPostBody(body, false)
+    const frames = scrollPostBody(body, 0)
 
     expect(lines.join('')).toBe(body)
     expect(frames[0]?.body).toBe(lines.slice(0, PLAIN_BODY_LINES).join(''))
@@ -28,35 +26,36 @@ describe('scrollPostBody', () => {
         (frame) => measureTextWrap(frame.body, POST_BODY_WIDTH).lineCount <= PLAIN_BODY_LINES,
       ),
     ).toBe(true)
-    expect(frames.every((frame) => !frame.showsImage)).toBe(true)
+    expect(frames.every((frame) => frame.imageIndex === null)).toBe(true)
   })
 
-  it('shows media only after the rolling text viewport reaches the end', () => {
+  it('adds every image as a separate page after the complete text viewport', () => {
     const body = 'A post with an image and enough text to span several display lines. '.repeat(30)
     const lines = splitPostBodyLines(body)
-    const frames = scrollPostBody(body, true)
-    const finalFrame = frames.at(-1)
+    const frames = scrollPostBody(body, 3)
+    const textFrames = frames.slice(0, -3)
 
     expect(lines.join('')).toBe(body)
-    expect(frames.slice(0, -1).every((frame) => !frame.showsImage)).toBe(true)
-    expect(finalFrame).toEqual({
-      body: lines.slice(-MEDIA_BODY_LINES).join(''),
-      showsImage: true,
-    })
-    expect(measureTextWrap(finalFrame?.body ?? '', POST_BODY_WIDTH).lineCount).toBeLessThanOrEqual(
-      MEDIA_BODY_LINES,
-    )
+    expect(textFrames.at(-1)?.body).toBe(lines.slice(-PLAIN_BODY_LINES).join(''))
+    expect(textFrames.every((frame) => frame.imageIndex === null)).toBe(true)
+    expect(frames.slice(-3)).toEqual([
+      { body: '', imageIndex: 0 },
+      { body: '', imageIndex: 1 },
+      { body: '', imageIndex: 2 },
+    ])
   })
 
   it('uses a single viewport when the entire post already fits', () => {
-    expect(scrollPostBody('Short post.', false)).toEqual([
-      { body: 'Short post.', showsImage: false },
-    ])
+    expect(scrollPostBody('Short post.', 0)).toEqual([{ body: 'Short post.', imageIndex: null }])
+  })
+
+  it('rejects image counts outside the X post media limit', () => {
+    expect(() => scrollPostBody('Post', 5)).toThrow('Image count must be an integer from 0 to 4')
   })
 
   it('keeps paragraph breaks inside the visible line budget', () => {
     const body = Array.from({ length: 12 }, (_, index) => `Paragraph ${index + 1}`).join('\n\n')
-    const frames = scrollPostBody(body, false)
+    const frames = scrollPostBody(body, 0)
 
     expect(splitPostBodyLines(body).join('')).toBe(body)
     expect(

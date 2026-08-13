@@ -1,8 +1,10 @@
 import type { PostImageKind } from '@even-g2-x-reader/contracts'
 import { canvasPngBytes } from './image-bytes.js'
 
-export const POST_IMAGE_WIDTH = 288
-export const POST_IMAGE_HEIGHT = 96
+export const FULLSCREEN_IMAGE_WIDTH = 576
+export const FULLSCREEN_IMAGE_HEIGHT = 288
+export const FULLSCREEN_IMAGE_TILE_WIDTH = 288
+export const FULLSCREEN_IMAGE_TILE_HEIGHT = 144
 
 export interface ImageRectangle {
   x: number
@@ -10,6 +12,30 @@ export interface ImageRectangle {
   width: number
   height: number
 }
+
+export const FULLSCREEN_IMAGE_TILES = [
+  { x: 0, y: 0, width: FULLSCREEN_IMAGE_TILE_WIDTH, height: FULLSCREEN_IMAGE_TILE_HEIGHT },
+  {
+    x: FULLSCREEN_IMAGE_TILE_WIDTH,
+    y: 0,
+    width: FULLSCREEN_IMAGE_TILE_WIDTH,
+    height: FULLSCREEN_IMAGE_TILE_HEIGHT,
+  },
+  {
+    x: 0,
+    y: FULLSCREEN_IMAGE_TILE_HEIGHT,
+    width: FULLSCREEN_IMAGE_TILE_WIDTH,
+    height: FULLSCREEN_IMAGE_TILE_HEIGHT,
+  },
+  {
+    x: FULLSCREEN_IMAGE_TILE_WIDTH,
+    y: FULLSCREEN_IMAGE_TILE_HEIGHT,
+    width: FULLSCREEN_IMAGE_TILE_WIDTH,
+    height: FULLSCREEN_IMAGE_TILE_HEIGHT,
+  },
+] as const satisfies readonly ImageRectangle[]
+
+export type FullscreenImageTileData = readonly [Uint8Array, Uint8Array, Uint8Array, Uint8Array]
 
 export function containImage(
   sourceWidth: number,
@@ -46,8 +72,8 @@ export function isMotionThumbnail(kind: PostImageKind): boolean {
 
 function drawPlayBadge(context: CanvasRenderingContext2D, kind: PostImageKind): void {
   if (!isMotionThumbnail(kind)) return
-  const centreX = POST_IMAGE_WIDTH / 2
-  const centreY = POST_IMAGE_HEIGHT / 2
+  const centreX = FULLSCREEN_IMAGE_WIDTH / 2
+  const centreY = FULLSCREEN_IMAGE_HEIGHT / 2
   context.fillStyle = '#000'
   context.strokeStyle = '#fff'
   context.lineWidth = 2
@@ -64,30 +90,61 @@ function drawPlayBadge(context: CanvasRenderingContext2D, kind: PostImageKind): 
   context.fill()
 }
 
-export function renderPostImagePlaceholder(kind: PostImageKind): Uint8Array {
+function renderTiles(canvas: HTMLCanvasElement): FullscreenImageTileData {
+  const renderTile = (tile: ImageRectangle): Uint8Array => {
+    const tileCanvas = document.createElement('canvas')
+    tileCanvas.width = tile.width
+    tileCanvas.height = tile.height
+    const context = tileCanvas.getContext('2d')
+    if (!context) throw new Error('Unable to create image tile canvas')
+    context.drawImage(
+      canvas,
+      tile.x,
+      tile.y,
+      tile.width,
+      tile.height,
+      0,
+      0,
+      tile.width,
+      tile.height,
+    )
+    return canvasPngBytes(tileCanvas)
+  }
+  return [
+    renderTile(FULLSCREEN_IMAGE_TILES[0]),
+    renderTile(FULLSCREEN_IMAGE_TILES[1]),
+    renderTile(FULLSCREEN_IMAGE_TILES[2]),
+    renderTile(FULLSCREEN_IMAGE_TILES[3]),
+  ]
+}
+
+export function renderPostImagePlaceholderTiles(kind: PostImageKind): FullscreenImageTileData {
   const canvas = document.createElement('canvas')
-  canvas.width = POST_IMAGE_WIDTH
-  canvas.height = POST_IMAGE_HEIGHT
+  canvas.width = FULLSCREEN_IMAGE_WIDTH
+  canvas.height = FULLSCREEN_IMAGE_HEIGHT
   const context = canvas.getContext('2d')
   if (context) {
     context.fillStyle = '#000'
-    context.fillRect(0, 0, POST_IMAGE_WIDTH, POST_IMAGE_HEIGHT)
+    context.fillRect(0, 0, FULLSCREEN_IMAGE_WIDTH, FULLSCREEN_IMAGE_HEIGHT)
     context.strokeStyle = '#fff'
     context.lineWidth = 2
-    context.strokeRect(1, 1, POST_IMAGE_WIDTH - 2, POST_IMAGE_HEIGHT - 2)
+    context.strokeRect(1, 1, FULLSCREEN_IMAGE_WIDTH - 2, FULLSCREEN_IMAGE_HEIGHT - 2)
     context.beginPath()
-    context.moveTo(18, 78)
-    context.lineTo(86, 34)
-    context.lineTo(132, 66)
-    context.lineTo(184, 24)
-    context.lineTo(270, 78)
+    context.moveTo(36, 252)
+    context.lineTo(172, 102)
+    context.lineTo(264, 198)
+    context.lineTo(368, 72)
+    context.lineTo(540, 252)
     context.stroke()
     drawPlayBadge(context, kind)
   }
-  return canvasPngBytes(canvas)
+  return renderTiles(canvas)
 }
 
-export async function renderPostImage(imageBlob: Blob, kind: PostImageKind): Promise<Uint8Array> {
+export async function renderPostImageTiles(
+  imageBlob: Blob,
+  kind: PostImageKind,
+): Promise<FullscreenImageTileData> {
   const objectUrl = URL.createObjectURL(imageBlob)
   try {
     const image = new Image()
@@ -96,23 +153,23 @@ export async function renderPostImage(imageBlob: Blob, kind: PostImageKind): Pro
     await image.decode()
 
     const canvas = document.createElement('canvas')
-    canvas.width = POST_IMAGE_WIDTH
-    canvas.height = POST_IMAGE_HEIGHT
+    canvas.width = FULLSCREEN_IMAGE_WIDTH
+    canvas.height = FULLSCREEN_IMAGE_HEIGHT
     const context = canvas.getContext('2d')
     if (!context) throw new Error('Unable to create image canvas')
     context.fillStyle = '#000'
-    context.fillRect(0, 0, POST_IMAGE_WIDTH, POST_IMAGE_HEIGHT)
+    context.fillRect(0, 0, FULLSCREEN_IMAGE_WIDTH, FULLSCREEN_IMAGE_HEIGHT)
     context.imageSmoothingEnabled = true
     context.imageSmoothingQuality = 'high'
     const rect = containImage(
       image.naturalWidth,
       image.naturalHeight,
-      POST_IMAGE_WIDTH,
-      POST_IMAGE_HEIGHT,
+      FULLSCREEN_IMAGE_WIDTH,
+      FULLSCREEN_IMAGE_HEIGHT,
     )
     context.drawImage(image, rect.x, rect.y, rect.width, rect.height)
     drawPlayBadge(context, kind)
-    return canvasPngBytes(canvas)
+    return renderTiles(canvas)
   } finally {
     URL.revokeObjectURL(objectUrl)
   }

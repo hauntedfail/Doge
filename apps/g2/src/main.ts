@@ -40,10 +40,10 @@ import {
   centreMetricCount,
 } from './metric-layout.js'
 import {
-  POST_IMAGE_HEIGHT,
-  POST_IMAGE_WIDTH,
-  renderPostImage,
-  renderPostImagePlaceholder,
+  FULLSCREEN_IMAGE_TILES,
+  renderPostImagePlaceholderTiles,
+  renderPostImageTiles,
+  type FullscreenImageTileData,
 } from './post-image.js'
 import { renderGlassesSections } from './presentation.js'
 import { reactionMenuItems, reactionSelection } from './reaction-menu.js'
@@ -64,10 +64,10 @@ const REPOST_COUNT_ID = 6
 const LIKE_COUNT_ID = 7
 const VIEW_COUNT_ID = 8
 const METRIC_STRIP_ID = 9
-const POST_IMAGE_ID = 10
 const ACTION_MENU_BACKGROUND_ID = 11
 const ACTION_MENU_ID = 12
 const BOOKMARK_COUNT_ID = 13
+const POST_IMAGE_INPUT_ID = 30
 const VIEW_TITLE_ID = 20
 const VIEW_LIST_ID = 22
 const POSITION_NAME = 'doge_position'
@@ -80,7 +80,13 @@ const LIKE_COUNT_NAME = 'doge_like_num'
 const VIEW_COUNT_NAME = 'doge_view_num'
 const BOOKMARK_COUNT_NAME = 'doge_bm_num'
 const METRIC_STRIP_NAME = 'doge_metrics'
-const POST_IMAGE_NAME = 'doge_post_img'
+const POST_IMAGE_INPUT_NAME = 'doge_img_input'
+const POST_IMAGE_TILE_CONFIG = [
+  { containerID: 31, containerName: 'doge_img_0', dataIndex: 0 },
+  { containerID: 32, containerName: 'doge_img_1', dataIndex: 1 },
+  { containerID: 33, containerName: 'doge_img_2', dataIndex: 2 },
+  { containerID: 34, containerName: 'doge_img_3', dataIndex: 3 },
+] as const
 const ACTION_MENU_NAME = 'doge_actions'
 const ACTION_MENU_BACKGROUND_NAME = 'doge_action_bg'
 const VIEW_TITLE_NAME = 'doge_view_title'
@@ -93,11 +99,8 @@ const AUTHOR_Y = 2
 const AVATAR_Y = 4
 const BODY_Y = 64
 const PLAIN_BODY_HEIGHT = 190
-const MEDIA_BODY_HEIGHT = 88
 const POSITION_X = 478
 const POSITION_WIDTH = 90
-const POST_IMAGE_X = 144
-const POST_IMAGE_Y = 156
 
 interface MetricText {
   kind: MetricIconKind
@@ -384,13 +387,12 @@ async function startGlasses(): Promise<void> {
   const bridge = await waitForEvenAppBridge()
   const renderedLengths = new Map<number, number>()
   const avatarCache = new Map<string, Promise<Uint8Array>>()
-  const postImageCache = new Map<string, Promise<Uint8Array>>()
+  const postImageCache = new Map<string, Promise<FullscreenImageTileData>>()
   let renderedAvatarUrl: string | null | undefined
   let renderedPostImageKey: string | null | undefined
-  let renderedHasPostImage = false
   let renderedMenuSignature = ''
   let renderedMetricSignature = ''
-  let renderedPageKind: AppLayer = 'view-select'
+  let renderedPageKind: AppLayer | 'post-image' = 'view-select'
   let bridgeQueue = Promise.resolve()
 
   interface AvatarData {
@@ -447,15 +449,18 @@ async function startGlasses(): Promise<void> {
       zOrderIndex: 6,
     })
 
-  const postImageContainer = () =>
-    new ImageContainerProperty({
-      xPosition: POST_IMAGE_X,
-      yPosition: POST_IMAGE_Y,
-      width: POST_IMAGE_WIDTH,
-      height: POST_IMAGE_HEIGHT,
-      containerID: POST_IMAGE_ID,
-      containerName: POST_IMAGE_NAME,
-      zOrderIndex: 5,
+  const postImageTileContainers = () =>
+    POST_IMAGE_TILE_CONFIG.map((config, index) => {
+      const tile = FULLSCREEN_IMAGE_TILES[config.dataIndex]
+      return new ImageContainerProperty({
+        xPosition: tile.x,
+        yPosition: tile.y,
+        width: tile.width,
+        height: tile.height,
+        containerID: config.containerID,
+        containerName: config.containerName,
+        zOrderIndex: index + 1,
+      })
     })
 
   const actionMenu = (items: string[]) =>
@@ -530,11 +535,9 @@ async function startGlasses(): Promise<void> {
     imageObject: [],
     listObject: [viewList()],
     menuSignature: '',
-    hasPostImage: false,
   })
 
   const readerPage = (sections: ReturnType<typeof renderGlassesSections>) => {
-    const hasPostImage = sections.postImageUrl !== null
     const post = state.posts[state.index]
     const menuItems =
       menuOpen && post
@@ -567,7 +570,7 @@ async function startGlasses(): Promise<void> {
         8,
         BODY_Y,
         560,
-        hasPostImage ? MEDIA_BODY_HEIGHT : PLAIN_BODY_HEIGHT,
+        PLAIN_BODY_HEIGHT,
         3,
         sections.body,
         menuOpen ? 0 : 1,
@@ -591,18 +594,29 @@ async function startGlasses(): Promise<void> {
       textObject,
       imageObject: [
         avatarContainer(),
-        ...(hasPostImage ? [postImageContainer()] : []),
         metricStripContainer(),
         ...(menuItems.length > 0 ? [actionMenuBackground()] : []),
       ],
       listObject: menuItems.length > 0 ? [actionMenu(menuItems)] : [],
       menuSignature: menuItems.join('\u0000'),
-      hasPostImage,
     }
   }
 
-  const page = (sections: ReturnType<typeof renderGlassesSections>) =>
-    appLayer === 'view-select' ? selectionPage() : readerPage(sections)
+  const postImagePage = () => ({
+    pageKind: 'post-image' as const,
+    textObject: [
+      textContainer(POST_IMAGE_INPUT_ID, POST_IMAGE_INPUT_NAME, 0, 0, 576, 288, 0, ' ', 1),
+    ],
+    imageObject: postImageTileContainers(),
+    listObject: [],
+    menuSignature: '',
+  })
+
+  const page = (sections: ReturnType<typeof renderGlassesSections>) => {
+    if (appLayer === 'view-select') return selectionPage()
+    if (sections.postImageUrl && !menuOpen) return postImagePage()
+    return readerPage(sections)
+  }
 
   const fallbackAvatar = (): Uint8Array => {
     const canvas = document.createElement('canvas')
@@ -724,20 +738,23 @@ async function startGlasses(): Promise<void> {
     renderedMetricSignature = signature
   }
 
-  const postImageData = async (url: string, kind: PostImageKind): Promise<Uint8Array> => {
+  const postImageData = async (
+    url: string,
+    kind: PostImageKind,
+  ): Promise<FullscreenImageTileData> => {
     const key = `${kind}:${url}`
     let pending = postImageCache.get(key)
     if (!pending) {
-      pending = loadPostImage(url).then((image) => renderPostImage(image, kind))
+      pending = loadPostImage(url).then((image) => renderPostImageTiles(image, kind))
       postImageCache.set(key, pending)
-      if (postImageCache.size > 32) postImageCache.delete(postImageCache.keys().next().value ?? '')
+      if (postImageCache.size > 8) postImageCache.delete(postImageCache.keys().next().value ?? '')
     }
     try {
       return await pending
     } catch (error) {
       postImageCache.delete(key)
       console.warn('Unable to load post image', error)
-      return renderPostImagePlaceholder(kind)
+      return renderPostImagePlaceholderTiles(kind)
     }
   }
 
@@ -748,16 +765,19 @@ async function startGlasses(): Promise<void> {
   ): Promise<void> => {
     const key = `${kind}:${url}`
     if (!force && renderedPostImageKey === key) return
-    const result = await bridge.updateImageRawData(
-      new ImageRawDataUpdate({
-        containerID: POST_IMAGE_ID,
-        containerName: POST_IMAGE_NAME,
-        imageData: await postImageData(url, kind),
-      }),
-    )
-    if (result !== ImageRawDataUpdateResult.success) {
-      console.warn(`Post image update failed: ${result}`)
-      return
+    const tiles = await postImageData(url, kind)
+    for (const config of POST_IMAGE_TILE_CONFIG) {
+      const result = await bridge.updateImageRawData(
+        new ImageRawDataUpdate({
+          containerID: config.containerID,
+          containerName: config.containerName,
+          imageData: tiles[config.dataIndex],
+        }),
+      )
+      if (result !== ImageRawDataUpdateResult.success) {
+        console.warn(`Post image tile ${config.dataIndex + 1} update failed: ${result}`)
+        return
+      }
     }
     renderedPostImageKey = key
   }
@@ -769,7 +789,7 @@ async function startGlasses(): Promise<void> {
     }
   }
 
-  const refreshPageImages = async (
+  const refreshReaderPageImages = async (
     sections: ReturnType<typeof renderGlassesSections>,
     force: boolean,
     epoch: number,
@@ -778,9 +798,6 @@ async function startGlasses(): Promise<void> {
     if (!latestRenderEpoch.isCurrent(epoch)) return
     await updateMetricStrip(force)
     if (!latestRenderEpoch.isCurrent(epoch)) return
-    if (sections.postImageUrl && sections.postImageKind) {
-      await updatePostImage(sections.postImageUrl, sections.postImageKind, force)
-    } else renderedPostImageKey = null
     await updateMenuBackground()
   }
 
@@ -800,12 +817,11 @@ async function startGlasses(): Promise<void> {
   if (result !== StartUpPageCreateResult.success)
     throw new Error(`Unable to create G2 page: ${result}`)
   rememberTextLengths(initialPage.textObject)
-  renderedHasPostImage = initialPage.hasPostImage
   renderedMenuSignature = initialPage.menuSignature
   renderedPageKind = initialPage.pageKind
   if (initialPage.pageKind === 'reader') {
     const epoch = latestRenderEpoch.issue()
-    await refreshPageImages(initial, true, epoch)
+    await refreshReaderPageImages(initial, true, epoch)
   }
 
   const draw = async (epoch: number): Promise<void> => {
@@ -813,10 +829,8 @@ async function startGlasses(): Promise<void> {
     const sections = renderGlassesSections(state, bodyPage)
     const nextPage = page(sections)
     let needsRebuild =
-      nextPage.pageKind !== renderedPageKind ||
-      nextPage.hasPostImage !== renderedHasPostImage ||
-      nextPage.menuSignature !== renderedMenuSignature
-    if (!needsRebuild) {
+      nextPage.pageKind !== renderedPageKind || nextPage.menuSignature !== renderedMenuSignature
+    if (!needsRebuild && nextPage.pageKind !== 'post-image') {
       for (const text of nextPage.textObject) {
         const containerID = text.containerID ?? 0
         const containerName = text.containerName ?? ''
@@ -848,11 +862,19 @@ async function startGlasses(): Promise<void> {
         }),
       )
       rememberTextLengths(nextPage.textObject)
-      renderedHasPostImage = nextPage.hasPostImage
       renderedMenuSignature = nextPage.menuSignature
       renderedPageKind = nextPage.pageKind
       if (nextPage.pageKind === 'reader') {
-        await refreshPageImages(sections, true, epoch)
+        await refreshReaderPageImages(sections, true, epoch)
+        renderedPostImageKey = undefined
+      } else if (
+        nextPage.pageKind === 'post-image' &&
+        sections.postImageUrl &&
+        sections.postImageKind
+      ) {
+        renderedAvatarUrl = undefined
+        renderedMetricSignature = ''
+        await updatePostImage(sections.postImageUrl, sections.postImageKind, true)
       } else {
         renderedAvatarUrl = undefined
         renderedPostImageKey = undefined
@@ -864,10 +886,10 @@ async function startGlasses(): Promise<void> {
       await updateAvatar(sections.avatarUrl, false, epoch)
       if (!latestRenderEpoch.isCurrent(epoch)) return
       await updateMetricStrip()
-      if (!latestRenderEpoch.isCurrent(epoch)) return
-      if (sections.postImageUrl && sections.postImageKind) {
-        await updatePostImage(sections.postImageUrl, sections.postImageKind)
-      }
+      return
+    }
+    if (nextPage.pageKind === 'post-image' && sections.postImageUrl && sections.postImageKind) {
+      await updatePostImage(sections.postImageUrl, sections.postImageKind)
     }
   }
   updateGlasses = (epoch) => {
