@@ -26,6 +26,22 @@ function source(): TimelineSource {
   return {
     list: vi.fn(async (feed) => ({ feed, posts: [post], nextCursor: null })),
     thread: vi.fn(async (id) => ({ rootId: id, posts: [post] })),
+    profile: vi.fn(async (handle) => ({
+      profile: {
+        id: '42',
+        name: 'Ada',
+        handle,
+        avatarUrl: post.authorAvatarUrl,
+        bio: 'Computing pioneer',
+        location: 'London',
+        followerCount: 100,
+        followingCount: 20,
+        postCount: 300,
+        verified: true,
+      },
+      posts: [post],
+      nextCursor: null,
+    })),
     setReaction: vi.fn(async (id, reaction, active) => ({ postId: id, reaction, active })),
   }
 }
@@ -36,6 +52,8 @@ describe('gateway', () => {
     expect((await app.request('/api/v1/timeline?feed=home')).status).toBe(200)
     expect((await app.request('/api/v1/timeline?feed=likes')).status).toBe(400)
     expect((await app.request('/api/v1/posts/1/thread')).status).toBe(200)
+    expect((await app.request('/api/v1/users/ada/profile')).status).toBe(200)
+    expect((await app.request('/api/v1/users/not-valid!/profile')).status).toBe(400)
     expect((await app.request('/api/v1/avatar')).status).toBe(400)
     expect((await app.request('/api/v1/media')).status).toBe(400)
     expect((await app.request('/i/api/graphql/anything', { method: 'POST' })).status).toBe(404)

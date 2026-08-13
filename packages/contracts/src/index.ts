@@ -47,6 +47,27 @@ export const threadSchema = z.object({
 })
 export type Thread = z.infer<typeof threadSchema>
 
+export const userProfileSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  handle: z.string().regex(/^[A-Za-z0-9_]{1,15}$/u),
+  avatarUrl: z.url().nullable(),
+  bio: z.string().max(1000),
+  location: z.string().max(256),
+  followerCount: z.number().int().nonnegative(),
+  followingCount: z.number().int().nonnegative(),
+  postCount: z.number().int().nonnegative(),
+  verified: z.boolean(),
+})
+export type UserProfile = z.infer<typeof userProfileSchema>
+
+export const profilePageSchema = z.object({
+  profile: userProfileSchema,
+  posts: z.array(postSchema),
+  nextCursor: z.string().min(1).nullable(),
+})
+export type ProfilePage = z.infer<typeof profilePageSchema>
+
 export const reactionResultSchema = z.object({
   postId: z.string().min(1),
   reaction: reactionSchema,

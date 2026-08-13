@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { reactionResultSchema, timelinePageSchema } from './index.js'
+import { profilePageSchema, reactionResultSchema, timelinePageSchema } from './index.js'
 
 describe('timelinePageSchema', () => {
   it('accepts the stable public DTO', () => {
@@ -135,5 +135,28 @@ describe('timelinePageSchema', () => {
         nextCursor: null,
       }),
     ).toThrow()
+  })
+
+  it('accepts a bounded profile page without exposing header images', () => {
+    const result = profilePageSchema.parse({
+      profile: {
+        id: '42',
+        name: 'Ada',
+        handle: 'ada',
+        avatarUrl: 'https://pbs.twimg.com/profile_images/42/ada_normal.jpg',
+        bio: 'Computing pioneer',
+        location: 'London',
+        followerCount: 100,
+        followingCount: 20,
+        postCount: 300,
+        verified: true,
+        headerImageUrl: 'https://pbs.twimg.com/profile_banners/42/header.jpg',
+      },
+      posts: [],
+      nextCursor: null,
+    })
+
+    expect(result.profile).toMatchObject({ handle: 'ada', followerCount: 100 })
+    expect(result.profile).not.toHaveProperty('headerImageUrl')
   })
 })

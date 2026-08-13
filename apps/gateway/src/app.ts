@@ -1,5 +1,10 @@
 import { timingSafeEqual } from 'node:crypto'
-import { feedSchema, reactionResultSchema, reactionSchema } from '@even-g2-x-reader/contracts'
+import {
+  feedSchema,
+  profilePageSchema,
+  reactionResultSchema,
+  reactionSchema,
+} from '@even-g2-x-reader/contracts'
 import { Hono, type Context } from 'hono'
 import { secureHeaders } from 'hono/secure-headers'
 import { z } from 'zod'
@@ -19,6 +24,8 @@ const timelineQuery = z.object({
   cursor: z.string().min(1).max(2048).optional(),
 })
 const postId = z.string().regex(/^\d{1,24}$/u)
+const userHandle = z.string().regex(/^[A-Za-z0-9_]{1,15}$/u)
+const profileQuery = z.object({ cursor: z.string().min(1).max(2048).optional() })
 
 function authorised(header: string | undefined, expected: string): boolean {
   const prefix = 'Bearer '
@@ -73,6 +80,19 @@ export function createApp(options: AppOptions): Hono {
       return context.json({ error: { code: 'invalid_request', message: 'Invalid post ID' } }, 400)
     }
     return context.json(await options.source.thread(id.data))
+  })
+  app.get('/api/v1/users/:handle/profile', async (context) => {
+    const handle = userHandle.safeParse(context.req.param('handle'))
+    const query = profileQuery.safeParse(context.req.query())
+    if (!handle.success || !query.success) {
+      return context.json(
+        { error: { code: 'invalid_request', message: 'Invalid handle or cursor' } },
+        400,
+      )
+    }
+    return context.json(
+      profilePageSchema.parse(await options.source.profile(handle.data, query.data.cursor)),
+    )
   })
   const setReaction = async (context: Context) => {
     const id = postId.safeParse(context.req.param('id'))

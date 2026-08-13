@@ -1,5 +1,6 @@
 import type {
   Feed,
+  ProfilePage,
   Reaction,
   ReactionResult,
   Thread,
@@ -7,7 +8,13 @@ import type {
 } from '@even-g2-x-reader/contracts'
 import { loadRelayCatalog, type OperationName, type RelayOperation } from './relay-catalog.js'
 import type { TimelineSource } from './source.js'
-import { assertNoGraphQlErrors, parseThread, parseTimeline } from './x-parser.js'
+import {
+  assertNoGraphQlErrors,
+  parseProfileTimeline,
+  parseThread,
+  parseTimeline,
+  parseUserProfile,
+} from './x-parser.js'
 
 const MAX_RESPONSE_BYTES = 5_000_000
 const operationByFeed: Record<Feed, OperationName> = {
@@ -69,6 +76,20 @@ function updateVariables(
   return copy
 }
 
+function replaceVariables(
+  operation: RelayOperation,
+  variables: Record<string, unknown>,
+): RelayOperation {
+  const copy = cloneOperation(operation)
+  if (copy.data) {
+    copy.data.variables = variables
+    return copy
+  }
+  if (!copy.params?.variables) throw new Error(`operation ${copy.path} has no variables`)
+  copy.params.variables = JSON.stringify(variables)
+  return copy
+}
+
 function mutationVariables(reaction: Reaction, active: boolean, postId: string) {
   if (reaction === 'repost') {
     return active
@@ -111,11 +132,7 @@ export class RelayTimelineSource implements TimelineSource {
     this.#catalogPath = catalogPath
   }
 
-  async #request(name: OperationName, cursor?: string, postId?: string): Promise<unknown> {
-    const catalog = await loadRelayCatalog(this.#catalogPath)
-    const fromCatalog = catalog.get(name)
-    if (!fromCatalog) throw new Error(`relay operation unavailable: ${name}`)
-    const operation = updateVariables(fromCatalog, cursor, postId)
+  async #send(name: OperationName, operation: RelayOperation): Promise<unknown> {
     const url = new URL(`i/api${operation.path.replace(/^\//u, '/')}`, this.#baseUrl)
     const headers = new Headers({ 'content-type': 'application/json' })
     const init: RequestInit = {
@@ -131,6 +148,23 @@ export class RelayTimelineSource implements TimelineSource {
       init.body = JSON.stringify(operation.data)
     }
     return readLimited(await fetch(url, init))
+  }
+
+  async #request(name: OperationName, cursor?: string, postId?: string): Promise<unknown> {
+    const catalog = await loadRelayCatalog(this.#catalogPath)
+    const fromCatalog = catalog.get(name)
+    if (!fromCatalog) throw new Error(`relay operation unavailable: ${name}`)
+    return this.#send(name, updateVariables(fromCatalog, cursor, postId))
+  }
+
+  async #requestWithVariables(
+    name: OperationName,
+    variables: Record<string, unknown>,
+  ): Promise<unknown> {
+    const catalog = await loadRelayCatalog(this.#catalogPath)
+    const fromCatalog = catalog.get(name)
+    if (!fromCatalog) throw new Error(`relay operation unavailable: ${name}`)
+    return this.#send(name, replaceVariables(fromCatalog, variables))
   }
 
   async #mutation(
@@ -162,6 +196,27 @@ export class RelayTimelineSource implements TimelineSource {
 
   async thread(postId: string): Promise<Thread> {
     return parseThread(await this.#request('TweetDetail', undefined, postId), postId)
+  }
+
+  async profile(handle: string, cursor?: string): Promise<ProfilePage> {
+    if (!/^[A-Za-z0-9_]{1,15}$/u.test(handle)) throw new Error('Invalid X handle')
+    const profile = parseUserProfile(
+      await this.#requestWithVariables('UserByScreenName', {
+        screen_name: handle,
+        withGrokTranslatedBio: false,
+      }),
+    )
+    const timeline = parseProfileTimeline(
+      await this.#requestWithVariables('UserTweets', {
+        userId: profile.id,
+        count: 20,
+        includePromotedContent: false,
+        withQuickPromoteEligibilityTweetFields: false,
+        withVoice: true,
+        ...(cursor ? { cursor } : {}),
+      }),
+    )
+    return { profile, ...timeline }
   }
 
   async setReaction(postId: string, reaction: Reaction, active: boolean): Promise<ReactionResult> {

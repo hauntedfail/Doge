@@ -1,6 +1,7 @@
 import type {
   Feed,
   Post,
+  ProfilePage,
   Reaction,
   ReactionResult,
   Thread,
@@ -85,6 +86,33 @@ export class MockTimelineSource implements TimelineSource {
           likeCount: 1,
         },
       ],
+    }
+  }
+
+  async profile(handle: string, cursor?: string): Promise<ProfilePage> {
+    const matching = (Object.keys(feedText) as Feed[])
+      .flatMap(postsFor)
+      .filter((post) => post.authorHandle.toLowerCase() === handle.toLowerCase())
+    const fallback = postsFor('home')[0]
+    const posts = matching.length > 0 ? matching : fallback ? [fallback] : []
+    const first = posts[0]
+    const offset = cursor === 'profile-page-2' ? 2 : 0
+    const pagePosts = posts.slice(offset, offset + 2).map((post) => this.#withViewerState(post))
+    return {
+      profile: {
+        id: first?.id ?? '0',
+        name: first?.authorName ?? handle,
+        handle: first?.authorHandle ?? handle,
+        avatarUrl: first?.authorAvatarUrl ?? null,
+        bio: 'Deterministic mock profile for Doge development.',
+        location: '',
+        followerCount: 42,
+        followingCount: 7,
+        postCount: posts.length,
+        verified: false,
+      },
+      posts: pagePosts,
+      nextCursor: offset + pagePosts.length < posts.length ? 'profile-page-2' : null,
     }
   }
 

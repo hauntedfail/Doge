@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseThread, parseTimeline } from './x-parser.js'
+import { parseProfileTimeline, parseThread, parseTimeline, parseUserProfile } from './x-parser.js'
 
 const raw = {
   data: {
@@ -256,5 +256,55 @@ describe('parseThread', () => {
   it('deduplicates recursively discovered tweets', () => {
     const repeated = { wrapper: [raw, raw] }
     expect(parseThread(repeated, '42').posts).toHaveLength(1)
+  })
+})
+
+describe('profile parsing', () => {
+  const userRaw = {
+    data: {
+      user: {
+        result: {
+          rest_id: '42',
+          is_blue_verified: true,
+          avatar: { image_url: 'https://pbs.twimg.com/profile_images/42/ada_normal.jpg' },
+          core: {
+            name: 'Ada Lovelace',
+            screen_name: 'ada',
+          },
+          legacy: {
+            description: 'Computing pioneer',
+            location: 'London',
+            followers_count: 100,
+            friends_count: 20,
+            statuses_count: 300,
+            profile_banner_url: 'https://pbs.twimg.com/profile_banners/42/header',
+          },
+        },
+      },
+    },
+  }
+
+  it('normalises profile data without a header image', () => {
+    const profile = parseUserProfile(userRaw)
+    expect(profile).toEqual({
+      id: '42',
+      name: 'Ada Lovelace',
+      handle: 'ada',
+      avatarUrl: 'https://pbs.twimg.com/profile_images/42/ada_normal.jpg',
+      bio: 'Computing pioneer',
+      location: 'London',
+      followerCount: 100,
+      followingCount: 20,
+      postCount: 300,
+      verified: true,
+    })
+    expect(profile).not.toHaveProperty('headerImageUrl')
+  })
+
+  it('reuses normal post parsing and cursor extraction for profile posts', () => {
+    expect(parseProfileTimeline(raw)).toEqual({
+      posts: [expect.objectContaining({ id: '42', authorHandle: 'ada' })],
+      nextCursor: 'next-page',
+    })
   })
 })

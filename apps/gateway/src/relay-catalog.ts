@@ -5,6 +5,8 @@ export const operationNames = [
   'HomeLatestTimeline',
   'Bookmarks',
   'TweetDetail',
+  'UserByScreenName',
+  'UserTweets',
   'FavoriteTweet',
   'UnfavoriteTweet',
   'CreateRetweet',

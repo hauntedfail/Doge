@@ -1,7 +1,13 @@
 import type { Post, Reaction } from '@even-g2-x-reader/contracts'
 
 export type ReactionMenuSelection =
-  { reaction: Reaction; active: boolean } | 'gallery' | 'reload' | 'thread' | 'close' | null
+  | { reaction: Reaction; active: boolean }
+  | 'gallery'
+  | 'reload'
+  | 'thread'
+  | 'profile'
+  | 'close'
+  | null
 
 export function reactionMenuItems(post: Post): string[] {
   return [
@@ -11,6 +17,7 @@ export function reactionMenuItems(post: Post): string[] {
     ...(post.images.length > 0 ? ['Gallery'] : []),
     'Reload',
     'Open thread',
+    'Profile',
     'Close',
   ]
 }
@@ -24,6 +31,7 @@ export function reactionSelection(post: Post, index: number): ReactionMenuSelect
   if (index === reloadIndex) return 'reload'
   const threadIndex = reloadIndex + 1
   if (index === threadIndex) return 'thread'
-  if (index === threadIndex + 1) return 'close'
+  if (index === threadIndex + 1) return 'profile'
+  if (index === threadIndex + 2) return 'close'
   return null
 }

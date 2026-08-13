@@ -1,10 +1,12 @@
 import {
   reactionResultSchema,
+  profilePageSchema,
   threadSchema,
   timelinePageSchema,
   type Feed,
   type Reaction,
   type ReactionResult,
+  type ProfilePage,
   type Thread,
   type TimelinePage,
 } from '@even-g2-x-reader/contracts'
@@ -88,6 +90,20 @@ export async function loadThread(postId: string, onProgress?: DataLoadProgress):
   }
   return threadSchema.parse(
     await get(`/api/v1/posts/${encodeURIComponent(postId)}/thread`, onProgress),
+  )
+}
+
+export async function loadProfile(
+  handle: string,
+  cursor?: string,
+  onProgress?: DataLoadProgress,
+): Promise<ProfilePage> {
+  if (!/^[A-Za-z0-9_]{1,15}$/u.test(handle)) throw new Error('Invalid X handle')
+  const query = new URLSearchParams()
+  if (cursor) query.set('cursor', cursor)
+  const suffix = query.size > 0 ? `?${query}` : ''
+  return profilePageSchema.parse(
+    await get(`/api/v1/users/${encodeURIComponent(handle)}/profile${suffix}`, onProgress),
   )
 }
 

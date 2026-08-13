@@ -1,5 +1,5 @@
 import './style.css'
-import type { PostImageKind } from '@even-g2-x-reader/contracts'
+import type { Post, PostImageKind } from '@even-g2-x-reader/contracts'
 import {
   CreateStartUpPageContainer,
   ImageContainerProperty,
@@ -15,7 +15,14 @@ import {
   type EvenHubEvent,
 } from '@evenrealities/even_hub_sdk'
 import { getTextWidth } from '@evenrealities/pretext'
-import { loadAvatarImage, loadPostImage, loadThread, loadTimeline, setReaction } from './api.js'
+import {
+  loadAvatarImage,
+  loadPostImage,
+  loadProfile,
+  loadThread,
+  loadTimeline,
+  setReaction,
+} from './api.js'
 import { ACTION_MENU_BACKGROUND_TILES, ACTION_MENU_BOUNDS } from './action-menu-layout.js'
 import { browserAccessToken, clearBrowserAccessToken, saveBrowserAccessToken } from './auth.js'
 import { registerBackgroundState } from './background-state.js'
@@ -52,6 +59,8 @@ import {
   type PostImageLayout,
 } from './post-image.js'
 import { renderGlassesSections } from './presentation.js'
+import { profileSummary } from './profile-presentation.js'
+import { initialProfileState, reduceProfileState, type ProfileState } from './profile-state.js'
 import { reactionMenuItems, reactionSelection } from './reaction-menu.js'
 import {
   initialReaderState,
@@ -82,6 +91,7 @@ const VIEW_LIST_ID = 22
 const LOADING_TITLE_ID = 40
 const LOADING_PROGRESS_ID = 41
 const LOADING_STATUS_ID = 42
+const PROFILE_STATS_ID = 43
 const POSITION_NAME = 'doge_position'
 const AUTHOR_NAME = 'doge_author'
 const BODY_NAME = 'doge_body'
@@ -111,6 +121,7 @@ const VIEW_LIST_NAME = 'doge_view_list'
 const LOADING_TITLE_NAME = 'doge_load_title'
 const LOADING_PROGRESS_NAME = 'doge_load_bar'
 const LOADING_STATUS_NAME = 'doge_load_state'
+const PROFILE_STATS_NAME = 'doge_prof_stats'
 const AVATAR_SIZE = 48
 const AUTHOR_Y = 2
 const AVATAR_Y = 4
@@ -162,6 +173,9 @@ let menuError: string | null = null
 let galleryImageIndex = 0
 let threadReturnBodyPage = 0
 let loadingProgress: LoadingProgress | null = null
+let profileState: ProfileState | null = null
+let profileBodyPage = 0
+let profileRevision = 0
 
 type ReaderCommand = SwipeDirection | 'confirm' | 'toggle-detail'
 
@@ -183,6 +197,36 @@ function currentLoadingProgress(): LoadingProgress {
   )
 }
 
+function profilePost(): Post | undefined {
+  const position = profileState?.position
+  return typeof position === 'number' ? profileState?.posts[position] : undefined
+}
+
+function profileReaderState(): ReaderState | null {
+  if (!profileState || typeof profileState.position !== 'number') return null
+  return {
+    feed: state.feed,
+    posts: profileState.posts,
+    index: profileState.position,
+    nextCursor: profileState.nextCursor,
+    mode: 'timeline',
+    status: profileState.status,
+    error: profileState.error,
+    returnTo: null,
+  }
+}
+
+function activePost(): Post | undefined {
+  return appLayer === 'profile' ? profilePost() : state.posts[state.index]
+}
+
+function renderActiveSections(): ReturnType<typeof renderGlassesSections> {
+  const profileReader = profileReaderState()
+  return profileReader
+    ? renderGlassesSections(profileReader, profileBodyPage)
+    : renderGlassesSections(state, bodyPage, loadingProgress ?? undefined)
+}
+
 function updatePhoneImageLoading(progress: ImageLoadingProgress | null): void {
   if (!progress) {
     updatePhone()
@@ -201,7 +245,7 @@ function updatePhoneImageLoading(progress: ImageLoadingProgress | null): void {
 }
 
 function updatePhone(): void {
-  const post = state.posts[state.index]
+  const post = activePost()
   const connection = element('connection')
   if (appLayer === 'view-select') {
     if (connection) {
@@ -214,6 +258,59 @@ function updatePhone(): void {
     if (element('position')) element('position')!.textContent = 'Double tap here to exit Doge'
     element('pairing')?.toggleAttribute('hidden', Boolean(browserAccessToken()))
     element('forget-device')?.toggleAttribute('hidden', !browserAccessToken())
+    return
+  }
+  if (appLayer === 'profile') {
+    if (profileState?.status === 'loading') {
+      const indicator = loadingIndicator(currentLoadingProgress())
+      if (connection) {
+        connection.textContent = `${indicator.title} · ${indicator.percent}%`
+        connection.dataset.state = 'loading'
+      }
+      if (element('feed')) element('feed')!.textContent = indicator.title
+      if (element('author')) element('author')!.textContent = indicator.label
+      if (element('post')) element('post')!.textContent = indicator.progressLine
+      if (element('position')) element('position')!.textContent = `${indicator.percent}%`
+      return
+    }
+    if (profileState?.status === 'error') {
+      if (connection) {
+        connection.textContent = profileState.error ?? 'Unable to load profile'
+        connection.dataset.state = 'error'
+      }
+      if (element('feed')) element('feed')!.textContent = 'PROFILE'
+      if (element('author')) element('author')!.textContent = `@${profileState.handle}`
+      if (element('post')) element('post')!.textContent = 'Unable to load this profile.'
+      if (element('position')) element('position')!.textContent = 'Double tap G2 to return'
+      return
+    }
+    if (profileState?.position === 'summary' && profileState.profile) {
+      const summary = profileSummary(profileState.profile)
+      if (connection) {
+        connection.textContent = 'Profile open on G2'
+        connection.dataset.state = 'ready'
+      }
+      if (element('feed')) element('feed')!.textContent = 'PROFILE'
+      if (element('author')) element('author')!.textContent = summary.author.replace('\n', ' · ')
+      if (element('post')) element('post')!.textContent = summary.body || 'No bio'
+      if (element('position')) element('position')!.textContent = summary.stats
+      return
+    }
+    if (connection) {
+      connection.textContent = 'Profile posts open on G2'
+      connection.dataset.state = 'ready'
+    }
+    if (element('feed')) element('feed')!.textContent = 'PROFILE POSTS'
+    if (element('author'))
+      element('author')!.textContent = post
+        ? `${post.authorName} · @${post.authorHandle}`
+        : 'No post selected'
+    if (element('post')) element('post')!.textContent = post?.text ?? 'No posts found.'
+    if (element('position'))
+      element('position')!.textContent =
+        post && typeof profileState?.position === 'number'
+          ? `${profileState.position + 1} / ${profileState.posts.length}`
+          : '—'
     return
   }
   if (appLayer === 'gallery') {
@@ -319,32 +416,71 @@ async function loadCurrentFeed(operation: LoadingOperation = 'initial'): Promise
 
 async function openView(feed: (typeof VIEW_OPTIONS)[number]['feed']): Promise<void> {
   stateRevision += 1
+  profileRevision += 1
   appLayer = 'reader'
   menuOpen = false
   menuError = null
   galleryImageIndex = 0
   threadReturnBodyPage = 0
   loadingProgress = null
+  profileState = null
+  profileBodyPage = 0
   bodyPage = 0
   state = reduceReaderState(state, { type: 'select-feed', feed })
   await loadCurrentFeed('initial')
 }
 
 async function returnToViewSelection(): Promise<void> {
+  profileRevision += 1
   appLayer = 'view-select'
   menuOpen = false
   menuError = null
   galleryImageIndex = 0
   threadReturnBodyPage = 0
   loadingProgress = null
+  profileState = null
+  profileBodyPage = 0
   bodyPage = 0
   await render()
 }
 
-async function returnFromGallery(): Promise<void> {
+async function returnToReader(): Promise<void> {
+  profileRevision += 1
   appLayer = 'reader'
   menuOpen = false
   menuError = null
+  loadingProgress = null
+  profileState = null
+  profileBodyPage = 0
+  await render()
+}
+
+async function openProfile(handle: string): Promise<void> {
+  profileRevision += 1
+  const revision = profileRevision
+  appLayer = 'profile'
+  menuOpen = false
+  menuError = null
+  profileBodyPage = 0
+  profileState = initialProfileState(handle)
+  await showLoadingStage('profile', 'Profile', 'connecting')
+  try {
+    const page = await loadProfile(handle, undefined, async (stage) => {
+      if (revision !== profileRevision) return
+      await showLoadingStage('profile', 'Profile', stage)
+    })
+    if (revision !== profileRevision || !profileState) return
+    await showLoadingStage('profile', 'Profile', 'rendering')
+    profileState = reduceProfileState(profileState, { type: 'loaded', ...page })
+    loadingProgress = null
+  } catch (error) {
+    if (revision !== profileRevision || !profileState) return
+    loadingProgress = null
+    profileState = reduceProfileState(profileState, {
+      type: 'error',
+      message: error instanceof Error ? error.message : 'Unknown error',
+    })
+  }
   await render()
 }
 
@@ -362,6 +498,82 @@ async function reloadCurrentView(): Promise<void> {
   await loadCurrentFeed('reload')
 }
 
+async function loadMoreProfile(): Promise<boolean> {
+  if (!profileState?.nextCursor) return false
+  profileRevision += 1
+  const revision = profileRevision
+  const handle = profileState.handle
+  const cursor = profileState.nextCursor
+  profileState = reduceProfileState(profileState, { type: 'loading' })
+  await showLoadingStage('profile', 'Profile', 'connecting')
+  try {
+    const page = await loadProfile(handle, cursor, async (stage) => {
+      if (revision !== profileRevision) return
+      await showLoadingStage('profile', 'Profile', stage)
+    })
+    if (revision !== profileRevision || !profileState) return false
+    await showLoadingStage('profile', 'Profile', 'rendering')
+    profileState = reduceProfileState(profileState, { type: 'appended', ...page })
+    loadingProgress = null
+    return true
+  } catch (error) {
+    if (revision !== profileRevision || !profileState) return false
+    loadingProgress = null
+    profileState = reduceProfileState(profileState, {
+      type: 'error',
+      message: error instanceof Error ? error.message : 'Unknown error',
+    })
+    await render()
+    return false
+  }
+}
+
+async function handleProfileAction(action: ReaderCommand): Promise<void> {
+  if (!profileState || action === 'confirm' || action === 'toggle-detail') return
+  if (profileState.status !== 'ready') return
+  if (profileState.position === 'summary') {
+    if (action === 'next') {
+      profileState = reduceProfileState(profileState, { type: 'next' })
+      profileBodyPage = 0
+      await render()
+    }
+    return
+  }
+
+  const reader = profileReaderState()
+  if (!reader) return
+  const sections = renderGlassesSections(reader, profileBodyPage)
+  if (action === 'next' && profileBodyPage < sections.bodyPageCount - 1) {
+    profileBodyPage += 1
+    await render()
+    return
+  }
+  if (action === 'previous' && profileBodyPage > 0) {
+    profileBodyPage -= 1
+    await render()
+    return
+  }
+  if (
+    action === 'next' &&
+    profileState.position === profileState.posts.length - 1 &&
+    profileState.nextCursor
+  ) {
+    if (!(await loadMoreProfile()) || !profileState || profileState.status !== 'ready') return
+  }
+
+  const previousPosition = profileState.position
+  profileState = reduceProfileState(profileState, { type: action })
+  if (profileState.position !== previousPosition) {
+    if (profileState.position === 'summary' || action === 'next') {
+      profileBodyPage = 0
+    } else {
+      const previousReader = profileReaderState()
+      profileBodyPage = previousReader ? renderGlassesSections(previousReader).bodyPageCount - 1 : 0
+    }
+  }
+  await render()
+}
+
 async function handleAction(action: ReaderCommand): Promise<void> {
   if (appLayer === 'gallery') {
     if (action !== 'next' && action !== 'previous') return
@@ -370,6 +582,10 @@ async function handleAction(action: ReaderCommand): Promise<void> {
     if (nextIndex === galleryImageIndex) return
     galleryImageIndex = nextIndex
     await render()
+    return
+  }
+  if (appLayer === 'profile') {
+    await handleProfileAction(action)
     return
   }
   if (appLayer !== 'reader') return
@@ -498,6 +714,10 @@ async function handleMenuSelection(index: number): Promise<void> {
     await reloadCurrentView()
     return
   }
+  if (selection === 'profile') {
+    await openProfile(post.authorHandle)
+    return
+  }
   try {
     const result = await setReaction(post.id, selection.reaction, selection.active)
     state = reduceReaderState(state, { type: 'reaction-updated', ...result })
@@ -514,11 +734,15 @@ registerBackgroundState(
   () => readerSnapshot(state),
   (saved) => {
     stateRevision += 1
+    profileRevision += 1
     state = restoreReaderSnapshot(state, saved)
     bodyPage = 0
     galleryImageIndex = 0
     threadReturnBodyPage = 0
     loadingProgress = null
+    profileState = null
+    profileBodyPage = 0
+    appLayer = appLayer === 'profile' ? 'reader' : appLayer
     menuOpen = false
     menuError = null
     void render()
@@ -546,12 +770,15 @@ element('pairing')?.addEventListener('submit', (event) => {
   input.value = ''
   if (message) message.textContent = 'This iPhone is paired with Doge.'
   stateRevision += 1
+  profileRevision += 1
   state = initialReaderState()
   appLayer = 'view-select'
   bodyPage = 0
   galleryImageIndex = 0
   threadReturnBodyPage = 0
   loadingProgress = null
+  profileState = null
+  profileBodyPage = 0
   menuOpen = false
   menuError = null
   void render()
@@ -559,12 +786,15 @@ element('pairing')?.addEventListener('submit', (event) => {
 element('forget-device')?.addEventListener('click', () => {
   clearBrowserAccessToken()
   stateRevision += 1
+  profileRevision += 1
   state = { ...initialReaderState(), status: 'error', error: 'Access key required on this iPhone' }
   appLayer = 'view-select'
   bodyPage = 0
   galleryImageIndex = 0
   threadReturnBodyPage = 0
   loadingProgress = null
+  profileState = null
+  profileBodyPage = 0
   menuOpen = false
   menuError = null
   void render()
@@ -773,14 +1003,65 @@ async function startGlasses(): Promise<void> {
     }
   }
 
-  const readerPage = (sections: ReturnType<typeof renderGlassesSections>) => {
-    const post = state.posts[state.index]
+  const profilePage = () => {
+    const profile = profileState?.profile
+    const summary = profile ? profileSummary(profile) : null
+    return {
+      pageKind: 'profile' as const,
+      textObject: [
+        textContainer(
+          AUTHOR_ID,
+          AUTHOR_NAME,
+          72,
+          AUTHOR_Y,
+          492,
+          58,
+          2,
+          summary?.author ?? `@${profileState?.handle ?? 'unknown'}`,
+        ),
+        textContainer(
+          BODY_ID,
+          BODY_NAME,
+          8,
+          BODY_Y,
+          560,
+          166,
+          3,
+          profileState?.status === 'error'
+            ? `Unable to load this profile.\n${profileState.error ?? 'Unknown error'}`
+            : (summary?.body ?? 'No bio'),
+          1,
+        ),
+        textContainer(
+          PROFILE_STATS_ID,
+          PROFILE_STATS_NAME,
+          8,
+          244,
+          560,
+          36,
+          5,
+          summary?.stats ?? '',
+        ),
+      ],
+      imageObject: [avatarContainer()],
+      listObject: [],
+      menuSignature: '',
+      image: null,
+    }
+  }
+
+  const readerPage = (
+    sections: ReturnType<typeof renderGlassesSections>,
+    reader: ReaderState,
+    allowMenu: boolean,
+  ) => {
+    const post = reader.posts[reader.index]
     const menuItems =
-      menuOpen && post
+      allowMenu && menuOpen && post
         ? [
             ...(menuError ? [menuError.slice(0, 64)] : []),
             ...reactionMenuItems(post).map((item) =>
-              item === 'Open thread' && state.mode === 'thread' ? 'Close thread' : item,
+              item === 'Open thread' && reader.mode === 'thread' ? 'Close thread' : item,
             ),
           ]
         : []
@@ -809,7 +1090,7 @@ async function startGlasses(): Promise<void> {
         PLAIN_BODY_HEIGHT,
         3,
         sections.body,
-        menuOpen ? 0 : 1,
+        menuItems.length > 0 ? 0 : 1,
       ),
       ...METRIC_FOOTER_LAYOUT.map((layout, index) => {
         const metric = METRIC_TEXT[layout.kind]
@@ -910,11 +1191,21 @@ async function startGlasses(): Promise<void> {
 
   const page = (sections: ReturnType<typeof renderGlassesSections>) => {
     if (appLayer === 'view-select') return selectionPage()
+    if (appLayer === 'profile') {
+      if (profileState?.status === 'loading') return loadingPage()
+      if (profileState?.position === 'summary' || profileState?.status === 'error') {
+        return profilePage()
+      }
+      const reader = profileReaderState()
+      if (!reader) return profilePage()
+      if (sections.postImageUrl) return postImagePage(sections)
+      return readerPage(sections, reader, false)
+    }
     if (state.status === 'loading') return loadingPage()
     const post = state.posts[state.index]
     if (appLayer === 'gallery' && post?.images.length) return galleryPage(post)
     if (sections.postImageUrl && !menuOpen) return postImagePage(sections)
-    return readerPage(sections)
+    return readerPage(sections, state, true)
   }
 
   const fallbackAvatar = (): Uint8Array => {
@@ -990,7 +1281,8 @@ async function startGlasses(): Promise<void> {
     if (!force && renderedAvatarUrl === url) return
     const outcome = await renderLatestImage({
       load: () => avatarData(url),
-      isCurrent: () => latestRenderEpoch.isCurrent(epoch) && appLayer === 'reader',
+      isCurrent: () =>
+        latestRenderEpoch.isCurrent(epoch) && (appLayer === 'reader' || appLayer === 'profile'),
       draw: async (avatar) => {
         const result = await bridge.updateImageRawData(
           new ImageRawDataUpdate({
@@ -1014,8 +1306,7 @@ async function startGlasses(): Promise<void> {
     renderedAvatarUrl = outcome.value.matchesUrl ? url : undefined
   }
 
-  const updateMetricStrip = async (force = false): Promise<void> => {
-    const post = state.posts[state.index]
+  const updateMetricStrip = async (force = false, post = activePost()): Promise<void> => {
     const metricState = {
       viewerHasLiked: post?.viewerHasLiked ?? false,
       viewerHasReposted: post?.viewerHasReposted ?? false,
@@ -1139,12 +1430,12 @@ async function startGlasses(): Promise<void> {
   ): Promise<void> => {
     await updateAvatar(sections.avatarUrl, force, epoch)
     if (!latestRenderEpoch.isCurrent(epoch)) return
-    await updateMetricStrip(force)
+    await updateMetricStrip(force, activePost())
     if (!latestRenderEpoch.isCurrent(epoch)) return
     await updateMenuBackground()
   }
 
-  const initial = renderGlassesSections(state, bodyPage, loadingProgress ?? undefined)
+  const initial = renderActiveSections()
   const initialPage = page(initial)
   const result = await bridge.createStartUpPageContainer(
     new CreateStartUpPageContainer({
@@ -1169,7 +1460,7 @@ async function startGlasses(): Promise<void> {
 
   const draw = async (epoch: number): Promise<void> => {
     if (!latestRenderEpoch.isCurrent(epoch)) return
-    const sections = renderGlassesSections(state, bodyPage, loadingProgress ?? undefined)
+    const sections = renderActiveSections()
     const nextPage = page(sections)
     let needsRebuild =
       nextPage.pageKind !== renderedPageKind || nextPage.menuSignature !== renderedMenuSignature
@@ -1210,6 +1501,10 @@ async function startGlasses(): Promise<void> {
       if (nextPage.pageKind === 'reader') {
         await refreshReaderPageImages(sections, true, epoch)
         renderedPostImageKey = undefined
+      } else if (nextPage.pageKind === 'profile') {
+        await updateAvatar(profileState?.profile?.avatarUrl ?? null, true, epoch)
+        renderedPostImageKey = undefined
+        renderedMetricSignature = ''
       } else if (nextPage.image) {
         renderedAvatarUrl = undefined
         renderedMetricSignature = ''
@@ -1232,7 +1527,11 @@ async function startGlasses(): Promise<void> {
     if (nextPage.pageKind === 'reader') {
       await updateAvatar(sections.avatarUrl, false, epoch)
       if (!latestRenderEpoch.isCurrent(epoch)) return
-      await updateMetricStrip()
+      await updateMetricStrip(false, activePost())
+      return
+    }
+    if (nextPage.pageKind === 'profile') {
+      await updateAvatar(profileState?.profile?.avatarUrl ?? null, false, epoch)
       return
     }
     if (nextPage.image) {
@@ -1272,7 +1571,7 @@ async function startGlasses(): Promise<void> {
             menuError = null
             await render()
           } else if (destination === 'reader') {
-            await returnFromGallery()
+            await returnToReader()
           } else if (destination === 'close-thread') {
             await handleAction('toggle-detail')
           } else {

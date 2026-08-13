@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { loadPostImage, loadTimeline, type DataLoadStage } from './api.js'
+import { loadPostImage, loadProfile, loadTimeline, type DataLoadStage } from './api.js'
 
 const storage = {
   getItem: () => null,
@@ -54,5 +54,40 @@ describe('API loading progress', () => {
 
     expect(image.size).toBe(5)
     expect(stages).toEqual(['downloading', 'downloaded'])
+  })
+
+  it('loads a validated cursor-paginated profile page', async () => {
+    vi.stubGlobal('window', {
+      location: { hash: '', port: '5173', origin: 'http://127.0.0.1:5173' },
+      localStorage: storage,
+      sessionStorage: storage,
+    })
+    const fetchMock = vi.fn(async (_input: string | URL | Request) =>
+      Response.json({
+        profile: {
+          id: '42',
+          name: 'Ada',
+          handle: 'ada',
+          avatarUrl: null,
+          bio: '',
+          location: '',
+          followerCount: 1,
+          followingCount: 2,
+          postCount: 3,
+          verified: false,
+        },
+        posts: [],
+        nextCursor: null,
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const page = await loadProfile('ada', 'next-page')
+
+    expect(page.profile.handle).toBe('ada')
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
+      '/api/v1/users/ada/profile?cursor=next-page',
+    )
+    await expect(loadProfile('not-valid!')).rejects.toThrow('Invalid X handle')
   })
 })

@@ -21,6 +21,9 @@ describe('Doge application navigation', () => {
     expect(backDestination({ layer: 'gallery', menuOpen: false, readerMode: 'thread' })).toBe(
       'reader',
     )
+    expect(backDestination({ layer: 'profile', menuOpen: false, readerMode: 'thread' })).toBe(
+      'reader',
+    )
     expect(backDestination({ layer: 'reader', menuOpen: false, readerMode: 'thread' })).toBe(
       'close-thread',
     )

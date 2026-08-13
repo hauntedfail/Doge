@@ -1,4 +1,4 @@
-export type LoadingOperation = 'initial' | 'reload' | 'thread'
+export type LoadingOperation = 'initial' | 'reload' | 'thread' | 'profile'
 export type LoadingStage = 'connecting' | 'downloading' | 'preparing' | 'rendering'
 
 export interface LoadingProgress {
@@ -38,8 +38,8 @@ export function loadingIndicator(progress: LoadingProgress): LoadingIndicator {
   const title =
     progress.operation === 'reload'
       ? `RELOADING ${target}`
-      : progress.operation === 'thread'
-        ? 'LOADING THREAD'
+      : progress.operation === 'thread' || progress.operation === 'profile'
+        ? `LOADING ${progress.operation.toUpperCase()}`
         : `LOADING ${target}`
   const filled = Math.round((details.percent / 100) * BAR_WIDTH)
   const progressLine = `${'━'.repeat(filled)}${'─'.repeat(BAR_WIDTH - filled)}  ${details.percent}%`

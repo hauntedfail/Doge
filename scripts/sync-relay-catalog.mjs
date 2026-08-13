@@ -9,6 +9,8 @@ const required = [
   'HomeLatestTimeline',
   'Bookmarks',
   'TweetDetail',
+  'UserByScreenName',
+  'UserTweets',
   'FavoriteTweet',
   'UnfavoriteTweet',
   'CreateRetweet',

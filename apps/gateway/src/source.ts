@@ -1,5 +1,6 @@
 import type {
   Feed,
+  ProfilePage,
   Reaction,
   ReactionResult,
   Thread,
@@ -9,5 +10,6 @@ import type {
 export interface TimelineSource {
   list(feed: Feed, cursor?: string): Promise<TimelinePage>
   thread(postId: string): Promise<Thread>
+  profile(handle: string, cursor?: string): Promise<ProfilePage>
   setReaction(postId: string, reaction: Reaction, active: boolean): Promise<ReactionResult>
 }

@@ -1,4 +1,11 @@
-import type { Feed, Post, Thread, TimelinePage } from '@even-g2-x-reader/contracts'
+import type {
+  Feed,
+  Post,
+  ProfilePage,
+  Thread,
+  TimelinePage,
+  UserProfile,
+} from '@even-g2-x-reader/contracts'
 import { parseAvatarUrl } from './avatar.js'
 import { parseMediaUrl } from './media.js'
 
@@ -191,4 +198,42 @@ export function parseThread(raw: unknown, rootId: string): Thread {
     if (root) posts.unshift(root)
   }
   return { rootId, posts }
+}
+
+export function parseUserProfile(raw: unknown): UserProfile {
+  assertNoGraphQlErrors(raw)
+  const root = isObject(raw) ? raw : undefined
+  const user = root ? objectAt(root, 'data', 'user', 'result') : undefined
+  const id = stringAt(user, 'rest_id')
+  const core = objectAt(user ?? {}, 'core')
+  const legacy = objectAt(user ?? {}, 'legacy')
+  const avatar = objectAt(user ?? {}, 'avatar')
+  const verification = objectAt(user ?? {}, 'verification')
+  const name = stringAt(core, 'name') ?? stringAt(legacy, 'name')
+  const handle = stringAt(core, 'screen_name') ?? stringAt(legacy, 'screen_name')
+  if (!id || !name || !handle || !/^[A-Za-z0-9_]{1,15}$/u.test(handle)) {
+    throw new Error('X profile response is missing identity')
+  }
+  return {
+    id,
+    name,
+    handle,
+    avatarUrl:
+      parseAvatarUrl(stringAt(avatar, 'image_url') ?? stringAt(legacy, 'profile_image_url_https'))
+        ?.href ?? null,
+    bio: stringAt(legacy, 'description') ?? '',
+    location: stringAt(legacy, 'location') ?? '',
+    followerCount: countAt(legacy, 'followers_count'),
+    followingCount: countAt(legacy, 'friends_count'),
+    postCount: countAt(legacy, 'statuses_count'),
+    verified:
+      booleanAt(user, 'is_blue_verified') ||
+      booleanAt(legacy, 'verified') ||
+      booleanAt(verification, 'verified'),
+  }
+}
+
+export function parseProfileTimeline(raw: unknown): Pick<ProfilePage, 'posts' | 'nextCursor'> {
+  assertNoGraphQlErrors(raw)
+  return { posts: collectPosts(raw), nextCursor: bottomCursor(raw) }
 }

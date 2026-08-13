@@ -20,6 +20,18 @@ async function catalogPath(pathForTweetDetail = '/graphql/query/TweetDetail'): P
     },
     { method: 'GET', path: '/graphql/query/Bookmarks', headers: {}, params: { variables: '{}' } },
     { method: 'GET', path: pathForTweetDetail, headers: {}, params: { variables: '{}' } },
+    {
+      method: 'GET',
+      path: '/graphql/query/UserByScreenName',
+      headers: {},
+      params: { variables: '{"screen_name":"sample"}' },
+    },
+    {
+      method: 'GET',
+      path: '/graphql/query/UserTweets',
+      headers: {},
+      params: { variables: '{"userId":"1"}' },
+    },
     { method: 'POST', path: '/graphql/query/FavoriteTweet', headers: {}, data: { variables: {} } },
     {
       method: 'POST',
@@ -63,6 +75,8 @@ describe('relay security boundary', () => {
       'HomeLatestTimeline',
       'Bookmarks',
       'TweetDetail',
+      'UserByScreenName',
+      'UserTweets',
       'FavoriteTweet',
       'UnfavoriteTweet',
       'CreateRetweet',
@@ -164,6 +178,55 @@ describe('relay security boundary', () => {
     expect(requests[1]?.init.method).toBe('GET')
     expect(JSON.parse(requests[1]?.url.searchParams.get('variables') ?? '{}')).toMatchObject({
       focalTweetId: '42',
+      count: 20,
+      includePromotedContent: false,
+    })
+  })
+
+  it('resolves a handle before requesting its cursor-paginated profile timeline', async () => {
+    const requests: URL[] = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string | URL | Request) => {
+        const url = new URL(String(input))
+        requests.push(url)
+        const body = url.pathname.endsWith('/UserByScreenName')
+          ? {
+              data: {
+                user: {
+                  result: {
+                    rest_id: '42',
+                    core: { name: 'Ada', screen_name: 'ada' },
+                    legacy: {
+                      description: '',
+                      location: '',
+                      followers_count: 1,
+                      friends_count: 2,
+                      statuses_count: 3,
+                    },
+                  },
+                },
+              },
+            }
+          : { data: { user: { result: { timeline: { instructions: [] } } } } }
+        return Response.json(body)
+      }),
+    )
+    const source = new RelayTimelineSource('http://127.0.0.1:6900', await catalogPath())
+
+    const page = await source.profile('ada', 'profile-cursor')
+
+    expect(page.profile).toMatchObject({ id: '42', handle: 'ada' })
+    expect(requests.map((url) => url.pathname)).toEqual([
+      '/i/api/graphql/query/UserByScreenName',
+      '/i/api/graphql/query/UserTweets',
+    ])
+    expect(JSON.parse(requests[0]?.searchParams.get('variables') ?? '{}')).toMatchObject({
+      screen_name: 'ada',
+    })
+    expect(JSON.parse(requests[1]?.searchParams.get('variables') ?? '{}')).toMatchObject({
+      userId: '42',
+      cursor: 'profile-cursor',
       count: 20,
       includePromotedContent: false,
     })
