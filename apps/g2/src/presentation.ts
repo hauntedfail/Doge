@@ -3,7 +3,7 @@ import { scrollPostBody } from './post-pages.js'
 import type { ReaderState } from './reader-state.js'
 
 export interface GlassesSections {
-  header: string
+  position: string
   author: string
   body: string
   avatarUrl: string | null
@@ -42,15 +42,13 @@ function date(value: string): string {
 }
 
 function postSections(post: Post, state: ReaderState, requestedPosition: number): GlassesSections {
-  const feed = state.mode === 'thread' ? 'THREAD' : state.feed.toUpperCase()
   const frames = scrollPostBody(clean(post.text), post.images.length > 0)
   const bodyPage = Math.min(Math.max(0, requestedPosition), frames.length - 1)
   const displayFrame = frames[bodyPage] ?? { body: '', showsImage: false }
-  const header = `DOGE / ${feed}    ${state.index + 1}/${state.posts.length}`
   const author =
     `${clean(post.authorName)}\n@${clean(post.authorHandle)}  ${date(post.createdAt)}`.trim()
   return {
-    header,
+    position: `${state.index + 1}/${state.posts.length}`,
     author,
     body: displayFrame.body,
     avatarUrl: post.authorAvatarUrl,
@@ -69,7 +67,7 @@ function postSections(post: Post, state: ReaderState, requestedPosition: number)
 export function renderGlassesSections(state: ReaderState, bodyPage = 0): GlassesSections {
   if (state.status === 'error') {
     return {
-      header: `DOGE / ${state.feed.toUpperCase()}`,
+      position: '',
       author: '',
       body: `Unable to load the timeline.\n${clean(state.error ?? 'Unknown error')}`,
       avatarUrl: null,
@@ -82,7 +80,7 @@ export function renderGlassesSections(state: ReaderState, bodyPage = 0): Glasses
   }
   if (state.status === 'loading' && state.posts.length === 0) {
     return {
-      header: `DOGE / ${state.feed.toUpperCase()}`,
+      position: '',
       author: '',
       body: 'Loading…',
       avatarUrl: null,
@@ -97,7 +95,7 @@ export function renderGlassesSections(state: ReaderState, bodyPage = 0): Glasses
   return post
     ? postSections(post, state, bodyPage)
     : {
-        header: `DOGE / ${state.feed.toUpperCase()}`,
+        position: '',
         author: '',
         body: 'No posts found.',
         avatarUrl: null,
@@ -111,7 +109,12 @@ export function renderGlassesSections(state: ReaderState, bodyPage = 0): Glasses
 
 export function renderGlassesText(state: ReaderState): string {
   const sections = renderGlassesSections(state)
-  return [sections.header, sections.author, sections.body, ...Object.values(sections.metricCounts)]
+  return [
+    sections.author,
+    sections.body,
+    ...Object.values(sections.metricCounts),
+    sections.position,
+  ]
     .filter(Boolean)
     .join('\n')
 }

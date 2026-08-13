@@ -9,8 +9,9 @@ import {
 } from './post-pages.js'
 
 describe('scrollPostBody', () => {
-  it('uses the reclaimed footer row for a fifth line of post text', () => {
-    expect(PLAIN_BODY_LINES).toBe(5)
+  it('uses the removed header space for seven text lines', () => {
+    expect(PLAIN_BODY_LINES).toBe(7)
+    expect(MEDIA_BODY_LINES).toBe(3)
   })
 
   it('preserves every character while moving the viewport by one visual line', () => {
@@ -38,7 +39,10 @@ describe('scrollPostBody', () => {
 
     expect(lines.join('')).toBe(body)
     expect(frames.slice(0, -1).every((frame) => !frame.showsImage)).toBe(true)
-    expect(finalFrame).toEqual({ body: lines.at(-1), showsImage: true })
+    expect(finalFrame).toEqual({
+      body: lines.slice(-MEDIA_BODY_LINES).join(''),
+      showsImage: true,
+    })
     expect(measureTextWrap(finalFrame?.body ?? '', POST_BODY_WIDTH).lineCount).toBeLessThanOrEqual(
       MEDIA_BODY_LINES,
     )

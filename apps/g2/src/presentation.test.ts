@@ -35,11 +35,12 @@ describe('renderGlassesText', () => {
     const output = renderGlassesText(state)
     expect(output.length).toBeLessThanOrEqual(1000)
     expect(output).not.toContain('\u0000')
-    expect(output).toContain('DOGE / HOME')
+    expect(output).not.toContain('DOGE')
+    expect(output).not.toContain('HOME')
     expect(output).toContain('@ada')
     const sections = renderGlassesSections(state)
     expect(sections).toMatchObject({
-      header: 'DOGE / HOME    1/1',
+      position: '1/1',
       author: expect.stringContaining('@ada'),
       avatarUrl: 'https://pbs.twimg.com/profile_images/1/ada_normal.jpg',
       postImageUrl: null,
@@ -56,6 +57,7 @@ describe('renderGlassesText', () => {
     expect(finalSections.postImageKind).toBe('video_thumbnail')
     expect(sections.bodyPageCount).toBeGreaterThan(2)
     expect(sections.body).not.toMatch(/\b(?:RE|RP|LIKE|VIEW)\b/u)
+    expect(sections).not.toHaveProperty('header')
     expect(sections).not.toHaveProperty('help')
     expect(output).not.toMatch(/(?:UP|DOWN|TAP|DOUBLE) (?:next|back|actions|views|exit)/u)
   })

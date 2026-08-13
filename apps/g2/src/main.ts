@@ -49,7 +49,7 @@ import {
   type ReaderState,
 } from './reader-state.js'
 
-const HEADER_ID = 1
+const POSITION_ID = 1
 const AUTHOR_ID = 2
 const BODY_ID = 3
 const AVATAR_ID = 4
@@ -62,7 +62,7 @@ const ACTION_MENU_BACKGROUND_ID = 11
 const ACTION_MENU_ID = 12
 const VIEW_TITLE_ID = 20
 const VIEW_LIST_ID = 22
-const HEADER_NAME = 'doge_header'
+const POSITION_NAME = 'doge_position'
 const AUTHOR_NAME = 'doge_author'
 const BODY_NAME = 'doge_body'
 const AVATAR_NAME = 'doge_avatar'
@@ -79,9 +79,16 @@ const VIEW_TITLE_WIDTH = Math.ceil(getTextWidth(VIEW_TITLE))
 const VIEW_TITLE_X = Math.floor((576 - VIEW_TITLE_WIDTH) / 2)
 const VIEW_LIST_NAME = 'doge_view_list'
 const AVATAR_SIZE = 48
+const AUTHOR_Y = 2
+const AVATAR_Y = 4
+const BODY_Y = 64
+const PLAIN_BODY_HEIGHT = 190
+const MEDIA_BODY_HEIGHT = 88
 const PLAIN_METRIC_Y = 258
 const MEDIA_METRIC_Y = 258
 const METRIC_COUNT_HEIGHT = 30
+const POSITION_X = 478
+const POSITION_WIDTH = 90
 const POST_IMAGE_X = 144
 const POST_IMAGE_Y = 156
 
@@ -428,7 +435,7 @@ async function startGlasses(): Promise<void> {
   const avatarContainer = () =>
     new ImageContainerProperty({
       xPosition: 12,
-      yPosition: 38,
+      yPosition: AVATAR_Y,
       width: AVATAR_SIZE,
       height: AVATAR_SIZE,
       containerID: AVATAR_ID,
@@ -537,15 +544,24 @@ async function startGlasses(): Promise<void> {
     const hasPostImage = sections.postImageUrl !== null
     const metricY = hasPostImage ? MEDIA_METRIC_Y : PLAIN_METRIC_Y
     const textObject = [
-      textContainer(HEADER_ID, HEADER_NAME, 8, 4, 560, 28, 1, sections.header),
-      textContainer(AUTHOR_ID, AUTHOR_NAME, 72, 36, 492, 58, 2, sections.author),
+      textContainer(
+        POSITION_ID,
+        POSITION_NAME,
+        POSITION_X,
+        metricY - 4,
+        POSITION_WIDTH,
+        METRIC_COUNT_HEIGHT,
+        10,
+        sections.position,
+      ),
+      textContainer(AUTHOR_ID, AUTHOR_NAME, 72, AUTHOR_Y, 492, 58, 2, sections.author),
       textContainer(
         BODY_ID,
         BODY_NAME,
         8,
-        100,
+        BODY_Y,
         560,
-        hasPostImage ? 52 : 154,
+        hasPostImage ? MEDIA_BODY_HEIGHT : PLAIN_BODY_HEIGHT,
         3,
         sections.body,
         menuOpen ? 0 : 1,

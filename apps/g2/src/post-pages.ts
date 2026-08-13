@@ -1,8 +1,8 @@
 import { getTextWidth, measureTextWrap } from '@evenrealities/pretext'
 
 export const POST_BODY_WIDTH = 560
-export const PLAIN_BODY_LINES = 5
-export const MEDIA_BODY_LINES = 1
+export const PLAIN_BODY_LINES = 7
+export const MEDIA_BODY_LINES = 3
 
 export interface PostDisplayFrame {
   body: string
