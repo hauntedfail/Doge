@@ -8,6 +8,10 @@ import {
 } from './post-pages.js'
 
 describe('paginatePostBody', () => {
+  it('uses the reclaimed footer row for a fifth line of post text', () => {
+    expect(PLAIN_BODY_LINES).toBe(5)
+  })
+
   it('preserves every character while fitting text-only pages', () => {
     const body = '日本語とEnglish wordsを混ぜた長い本文。'.repeat(80)
     const pages = paginatePostBody(body, false)

@@ -1,7 +1,7 @@
 import { measureTextWrap } from '@evenrealities/pretext'
 
 export const POST_BODY_WIDTH = 560
-export const PLAIN_BODY_LINES = 4
+export const PLAIN_BODY_LINES = 5
 export const MEDIA_BODY_LINES = 1
 
 export interface PostDisplayPage {

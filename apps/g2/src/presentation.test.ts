@@ -55,8 +55,19 @@ describe('renderGlassesText', () => {
     )
     expect(finalSections.postImageKind).toBe('video_thumbnail')
     expect(sections.body).not.toMatch(/\b(?:RE|RP|LIKE|VIEW)\b/u)
-    expect(sections.help).toContain('DOUBLE views')
-    expect(sections.help).not.toContain('R1 feed')
-    expect(sections.help).not.toContain('DOUBLE exit')
+    expect(sections).not.toHaveProperty('help')
+    expect(output).not.toMatch(/(?:UP|DOWN|TAP|DOUBLE) (?:next|back|actions|views|exit)/u)
+  })
+
+  it('does not spend loading or error pages on control hints', () => {
+    const loading = renderGlassesSections(initialReaderState())
+    const failed = renderGlassesSections({
+      ...initialReaderState(),
+      status: 'error',
+      error: 'offline',
+    })
+
+    expect(loading.body).toBe('Loading…')
+    expect(failed.body).toBe('Unable to load the timeline.\noffline')
   })
 })

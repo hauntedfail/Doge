@@ -14,7 +14,6 @@ export interface GlassesSections {
     repost: string
     like: string
   }
-  help: string
   bodyPage: number
   bodyPageCount: number
 }
@@ -51,7 +50,6 @@ function postSections(post: Post, state: ReaderState, requestedPage: number): Gl
   const header = `DOGE / ${feed}    ${state.index + 1}/${state.posts.length}${pageMarker}`
   const author =
     `${clean(post.authorName)}\n@${clean(post.authorHandle)}  ${date(post.createdAt)}`.trim()
-  const help = 'UP next  DOWN back  TAP actions  DOUBLE views'
   return {
     header,
     author,
@@ -64,7 +62,6 @@ function postSections(post: Post, state: ReaderState, requestedPage: number): Gl
       repost: compact(post.repostCount),
       like: compact(post.likeCount),
     },
-    help: bodyPage < pages.length - 1 ? 'UP more  DOWN back  DOUBLE views' : help,
     bodyPage,
     bodyPageCount: pages.length,
   }
@@ -75,12 +72,11 @@ export function renderGlassesSections(state: ReaderState, bodyPage = 0): Glasses
     return {
       header: `DOGE / ${state.feed.toUpperCase()}`,
       author: '',
-      body: `Unable to load the timeline.\n${clean(state.error ?? 'Unknown error')}\n\nTAP retry  DOUBLE views`,
+      body: `Unable to load the timeline.\n${clean(state.error ?? 'Unknown error')}`,
       avatarUrl: null,
       postImageUrl: null,
       postImageKind: null,
       metricCounts: { reply: '', repost: '', like: '' },
-      help: '',
       bodyPage: 0,
       bodyPageCount: 1,
     }
@@ -89,12 +85,11 @@ export function renderGlassesSections(state: ReaderState, bodyPage = 0): Glasses
     return {
       header: `DOGE / ${state.feed.toUpperCase()}`,
       author: '',
-      body: 'Loading…\n\nDOUBLE views',
+      body: 'Loading…',
       avatarUrl: null,
       postImageUrl: null,
       postImageKind: null,
       metricCounts: { reply: '', repost: '', like: '' },
-      help: '',
       bodyPage: 0,
       bodyPageCount: 1,
     }
@@ -105,12 +100,11 @@ export function renderGlassesSections(state: ReaderState, bodyPage = 0): Glasses
     : {
         header: `DOGE / ${state.feed.toUpperCase()}`,
         author: '',
-        body: 'No posts found.\n\nDOUBLE views',
+        body: 'No posts found.',
         avatarUrl: null,
         postImageUrl: null,
         postImageKind: null,
         metricCounts: { reply: '', repost: '', like: '' },
-        help: '',
         bodyPage: 0,
         bodyPageCount: 1,
       }
@@ -118,13 +112,7 @@ export function renderGlassesSections(state: ReaderState, bodyPage = 0): Glasses
 
 export function renderGlassesText(state: ReaderState): string {
   const sections = renderGlassesSections(state)
-  return [
-    sections.header,
-    sections.author,
-    sections.body,
-    ...Object.values(sections.metricCounts),
-    sections.help,
-  ]
+  return [sections.header, sections.author, sections.body, ...Object.values(sections.metricCounts)]
     .filter(Boolean)
     .join('\n')
 }

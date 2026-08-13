@@ -10,10 +10,10 @@ import type { TimelineSource } from './source.js'
 
 const feedText: Record<Feed, string[]> = {
   home: [
-    'Even G2 reader is running in mock mode. Swipe up for the next post.',
+    'Doge is running in mock mode with deterministic timeline data.',
     'The X Safe Relay stays on localhost. Doge exposes only scoped gateway routes.',
-    'Tap the right glasses touchpad to open actions. Double-tap to exit.',
-    'A ring tap cycles Home, Following, and Bookmarks.',
+    'Viewer reaction state is reflected in the Like, Repost, and Bookmark icons.',
+    'Home, Following, and Bookmarks use separate scoped timeline requests.',
   ],
   following: [
     'Following feed: this deterministic sample works without an X session.',
@@ -80,7 +80,7 @@ export class MockTimelineSource implements TimelineSource {
           id: String(Number(postId) + 9_000_000_000_000),
           authorName: 'Thread Reply',
           authorHandle: 'reply',
-          text: 'This is a mock reply. Tap again to return to the feed.',
+          text: 'This is a deterministic mock reply returned by the scoped thread route.',
           likeCount: 1,
         },
       ],

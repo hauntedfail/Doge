@@ -54,13 +54,11 @@ const AVATAR_ID = 4
 const REPLY_COUNT_ID = 5
 const REPOST_COUNT_ID = 6
 const LIKE_COUNT_ID = 7
-const HELP_ID = 8
 const METRIC_STRIP_ID = 9
 const POST_IMAGE_ID = 10
 const ACTION_MENU_BACKGROUND_ID = 11
 const ACTION_MENU_ID = 12
 const VIEW_TITLE_ID = 20
-const VIEW_HELP_ID = 21
 const VIEW_LIST_ID = 22
 const HEADER_NAME = 'doge_header'
 const AUTHOR_NAME = 'doge_author'
@@ -69,16 +67,14 @@ const AVATAR_NAME = 'doge_avatar'
 const REPLY_COUNT_NAME = 'doge_reply_num'
 const REPOST_COUNT_NAME = 'doge_rp_num'
 const LIKE_COUNT_NAME = 'doge_like_num'
-const HELP_NAME = 'doge_help'
 const METRIC_STRIP_NAME = 'doge_metrics'
 const POST_IMAGE_NAME = 'doge_post_img'
 const ACTION_MENU_NAME = 'doge_actions'
 const ACTION_MENU_BACKGROUND_NAME = 'doge_action_bg'
 const VIEW_TITLE_NAME = 'doge_view_title'
-const VIEW_HELP_NAME = 'doge_view_help'
 const VIEW_LIST_NAME = 'doge_view_list'
 const AVATAR_SIZE = 48
-const PLAIN_METRIC_Y = 220
+const PLAIN_METRIC_Y = 258
 const MEDIA_METRIC_Y = 258
 const METRIC_COUNT_HEIGHT = 30
 const POST_IMAGE_X = 144
@@ -486,9 +482,9 @@ async function startGlasses(): Promise<void> {
   const viewList = () =>
     new ListContainerProperty({
       xPosition: 72,
-      yPosition: 58,
+      yPosition: 50,
       width: 432,
-      height: 168,
+      height: 230,
       borderWidth: 2,
       borderColor: 15,
       borderRadius: 6,
@@ -509,16 +505,6 @@ async function startGlasses(): Promise<void> {
     pageKind: 'view-select' as const,
     textObject: [
       textContainer(VIEW_TITLE_ID, VIEW_TITLE_NAME, 8, 8, 560, 34, 1, 'DOGE  ·  SELECT VIEW'),
-      textContainer(
-        VIEW_HELP_ID,
-        VIEW_HELP_NAME,
-        8,
-        246,
-        560,
-        34,
-        3,
-        'SCROLL choose   TAP open   DOUBLE TAP exit',
-      ),
     ],
     imageObject: [],
     listObject: [viewList()],
@@ -538,7 +524,7 @@ async function startGlasses(): Promise<void> {
         8,
         100,
         560,
-        hasPostImage ? 52 : 112,
+        hasPostImage ? 52 : 154,
         3,
         sections.body,
         menuOpen ? 0 : 1,
@@ -556,9 +542,6 @@ async function startGlasses(): Promise<void> {
         ),
       ),
     ]
-    if (!hasPostImage) {
-      textObject.push(textContainer(HELP_ID, HELP_NAME, 8, 252, 560, 36, 10, sections.help))
-    }
     const post = state.posts[state.index]
     const menuItems =
       menuOpen && post
