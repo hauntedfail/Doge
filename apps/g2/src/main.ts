@@ -16,6 +16,7 @@ import {
 } from '@evenrealities/even_hub_sdk'
 import { getTextWidth } from '@evenrealities/pretext'
 import { loadAvatarImage, loadPostImage, loadThread, loadTimeline, setReaction } from './api.js'
+import { ACTION_MENU_BACKGROUND_TILES, ACTION_MENU_BOUNDS } from './action-menu-layout.js'
 import { browserAccessToken, clearBrowserAccessToken, saveBrowserAccessToken } from './auth.js'
 import { registerBackgroundState } from './background-state.js'
 import {
@@ -69,6 +70,7 @@ const METRIC_STRIP_ID = 9
 const ACTION_MENU_BACKGROUND_ID = 11
 const ACTION_MENU_ID = 12
 const BOOKMARK_COUNT_ID = 13
+const ACTION_MENU_BACKGROUND_BOTTOM_ID = 14
 const POST_IMAGE_INPUT_ID = 30
 const VIEW_TITLE_ID = 20
 const VIEW_LIST_ID = 22
@@ -91,6 +93,7 @@ const POST_IMAGE_TILE_CONFIG = [
 ] as const
 const ACTION_MENU_NAME = 'doge_actions'
 const ACTION_MENU_BACKGROUND_NAME = 'doge_action_bg'
+const ACTION_MENU_BACKGROUND_BOTTOM_NAME = 'doge_action_bg2'
 const VIEW_TITLE_NAME = 'doge_view_title'
 const VIEW_TITLE = 'DOGE  ·  SELECT VIEW'
 const VIEW_TITLE_WIDTH = Math.ceil(getTextWidth(VIEW_TITLE))
@@ -103,6 +106,21 @@ const BODY_Y = 64
 const PLAIN_BODY_HEIGHT = 190
 const POSITION_X = 478
 const POSITION_WIDTH = 90
+
+const ACTION_MENU_BACKGROUND_CONFIG = [
+  {
+    ...ACTION_MENU_BACKGROUND_TILES[0],
+    containerID: ACTION_MENU_BACKGROUND_ID,
+    containerName: ACTION_MENU_BACKGROUND_NAME,
+    zOrderIndex: 13,
+  },
+  {
+    ...ACTION_MENU_BACKGROUND_TILES[1],
+    containerID: ACTION_MENU_BACKGROUND_BOTTOM_ID,
+    containerName: ACTION_MENU_BACKGROUND_BOTTOM_NAME,
+    zOrderIndex: 14,
+  },
+] as const
 
 interface MetricText {
   kind: MetricIconKind
@@ -516,10 +534,10 @@ async function startGlasses(): Promise<void> {
 
   const actionMenu = (items: string[]) =>
     new ListContainerProperty({
-      xPosition: 316,
-      yPosition: 72,
-      width: 252,
-      height: 144,
+      xPosition: ACTION_MENU_BOUNDS.x,
+      yPosition: ACTION_MENU_BOUNDS.y,
+      width: ACTION_MENU_BOUNDS.width,
+      height: ACTION_MENU_BOUNDS.height,
       borderWidth: 2,
       borderColor: 15,
       borderRadius: 6,
@@ -527,7 +545,7 @@ async function startGlasses(): Promise<void> {
       containerID: ACTION_MENU_ID,
       containerName: ACTION_MENU_NAME,
       isEventCapture: 1,
-      zOrderIndex: 14,
+      zOrderIndex: 15,
       itemContainer: new ListItemContainerProperty({
         itemCount: items.length,
         itemWidth: 0,
@@ -536,16 +554,19 @@ async function startGlasses(): Promise<void> {
       }),
     })
 
-  const actionMenuBackground = () =>
-    new ImageContainerProperty({
-      xPosition: 316,
-      yPosition: 72,
-      width: 252,
-      height: 144,
-      containerID: ACTION_MENU_BACKGROUND_ID,
-      containerName: ACTION_MENU_BACKGROUND_NAME,
-      zOrderIndex: 13,
-    })
+  const actionMenuBackgrounds = () =>
+    ACTION_MENU_BACKGROUND_CONFIG.map(
+      (config) =>
+        new ImageContainerProperty({
+          xPosition: config.x,
+          yPosition: config.y,
+          width: config.width,
+          height: config.height,
+          containerID: config.containerID,
+          containerName: config.containerName,
+          zOrderIndex: config.zOrderIndex,
+        }),
+    )
 
   const viewList = () =>
     new ListContainerProperty({
@@ -647,7 +668,7 @@ async function startGlasses(): Promise<void> {
       imageObject: [
         avatarContainer(),
         metricStripContainer(),
-        ...(menuItems.length > 0 ? [actionMenuBackground()] : []),
+        ...(menuItems.length > 0 ? actionMenuBackgrounds() : []),
       ],
       listObject: menuItems.length > 0 ? [actionMenu(menuItems)] : [],
       menuSignature: menuItems.join('\u0000'),
@@ -719,32 +740,32 @@ async function startGlasses(): Promise<void> {
     return canvasPngBytes(canvas)
   }
 
-  const menuBackgroundData = (): Uint8Array => {
+  const menuBackgroundData = (width: number, height: number): Uint8Array => {
     const canvas = document.createElement('canvas')
-    canvas.width = 252
-    canvas.height = 144
+    canvas.width = width
+    canvas.height = height
     const context = canvas.getContext('2d')
     if (context) {
       context.fillStyle = '#000'
       context.fillRect(0, 0, canvas.width, canvas.height)
-      context.strokeStyle = '#fff'
-      context.lineWidth = 2
-      context.strokeRect(1, 1, canvas.width - 2, canvas.height - 2)
     }
     return canvasPngBytes(canvas)
   }
 
   const updateMenuBackground = async (): Promise<void> => {
     if (!menuOpen) return
-    const result = await bridge.updateImageRawData(
-      new ImageRawDataUpdate({
-        containerID: ACTION_MENU_BACKGROUND_ID,
-        containerName: ACTION_MENU_BACKGROUND_NAME,
-        imageData: menuBackgroundData(),
-      }),
-    )
-    if (result !== ImageRawDataUpdateResult.success) {
-      console.warn(`Action menu background update failed: ${result}`)
+    for (const [index, config] of ACTION_MENU_BACKGROUND_CONFIG.entries()) {
+      const result = await bridge.updateImageRawData(
+        new ImageRawDataUpdate({
+          containerID: config.containerID,
+          containerName: config.containerName,
+          imageData: menuBackgroundData(config.width, config.height),
+        }),
+      )
+      if (result !== ImageRawDataUpdateResult.success) {
+        console.warn(`Action menu background tile ${index + 1} update failed: ${result}`)
+        return
+      }
     }
   }
 
@@ -994,9 +1015,13 @@ async function startGlasses(): Promise<void> {
       .then(async () => {
         const action = classifyInput(event)
         if (action === 'double-tap') {
-          const destination = doubleTapDestination(appLayer)
+          const destination = doubleTapDestination(appLayer, menuOpen)
           if (destination === 'exit') {
             await bridge.shutDownPageContainer(1)
+          } else if (destination === 'close-menu') {
+            menuOpen = false
+            menuError = null
+            await render()
           } else if (destination === 'reader') {
             await returnFromGallery()
           } else {

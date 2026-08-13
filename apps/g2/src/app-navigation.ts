@@ -12,7 +12,11 @@ export function feedForViewIndex(index: number): Feed | null {
   return VIEW_OPTIONS[index]?.feed ?? null
 }
 
-export function doubleTapDestination(layer: AppLayer): 'reader' | 'view-select' | 'exit' {
+export function doubleTapDestination(
+  layer: AppLayer,
+  menuOpen = false,
+): 'close-menu' | 'reader' | 'view-select' | 'exit' {
+  if (menuOpen) return 'close-menu'
   if (layer === 'gallery') return 'reader'
   return layer === 'reader' ? 'view-select' : 'exit'
 }
