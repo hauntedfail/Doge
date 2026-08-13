@@ -33,7 +33,7 @@ function trimTo(value: string, max: number): string {
 
 function postText(post: Post, state: ReaderState): string {
   const feed = state.mode === 'thread' ? 'THREAD' : state.feed.toUpperCase()
-  const header = `X / ${feed}    ${state.index + 1}/${state.posts.length}`
+  const header = `DOGE / ${feed}    ${state.index + 1}/${state.posts.length}`
   const author =
     `${clean(post.authorName)}  @${clean(post.authorHandle)}  ${date(post.createdAt)}`.trim()
   const metrics = `RE ${compact(post.replyCount)}  RP ${compact(post.repostCount)}  LIKE ${compact(post.likeCount)}  VIEW ${compact(post.viewCount)}`
@@ -48,14 +48,14 @@ function postText(post: Post, state: ReaderState): string {
 export function renderGlassesText(state: ReaderState): string {
   let output: string
   if (state.status === 'error') {
-    output = `X / ${state.feed.toUpperCase()}\n\nUnable to load the timeline.\n${clean(state.error ?? 'Unknown error')}\n\nTAP retry  R1 switch feed  DOUBLE exit`
+    output = `DOGE / ${state.feed.toUpperCase()}\n\nUnable to load the timeline.\n${clean(state.error ?? 'Unknown error')}\n\nTAP retry  R1 switch feed  DOUBLE exit`
   } else if (state.status === 'loading' && state.posts.length === 0) {
-    output = `X / ${state.feed.toUpperCase()}\n\nLoading…\n\nR1 switch feed  DOUBLE exit`
+    output = `DOGE / ${state.feed.toUpperCase()}\n\nLoading…\n\nR1 switch feed  DOUBLE exit`
   } else {
     const post = state.posts[state.index]
     output = post
       ? postText(post, state)
-      : `X / ${state.feed.toUpperCase()}\n\nNo posts found.\n\nR1 switch feed  DOUBLE exit`
+      : `DOGE / ${state.feed.toUpperCase()}\n\nNo posts found.\n\nR1 switch feed  DOUBLE exit`
   }
   return trimTo(output, MAX_CONTENT)
 }

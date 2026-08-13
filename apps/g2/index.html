@@ -4,15 +4,32 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="color-scheme" content="dark" />
-    <title>G2 X Reader</title>
+    <title>Doge</title>
   </head>
   <body>
     <main class="shell">
       <header>
-        <p class="eyebrow">EVEN G2 · READ ONLY</p>
-        <h1>X Reader</h1>
+        <p class="eyebrow">EVEN G2 · READ ONLY X</p>
+        <h1>Doge</h1>
         <p id="connection" class="status">Starting…</p>
       </header>
+      <form id="pairing" class="pairing" autocomplete="off">
+        <h2>Pair this iPhone</h2>
+        <p>Paste the Doge access key once. It stays on this iPhone until you remove it.</p>
+        <label for="access-key">Access key</label>
+        <input
+          id="access-key"
+          name="access-key"
+          type="password"
+          inputmode="text"
+          autocapitalize="none"
+          autocomplete="off"
+          spellcheck="false"
+          required
+        />
+        <button type="submit">Pair Doge</button>
+        <p id="pairing-message" class="pairing-message" aria-live="polite"></p>
+      </form>
       <section class="card" aria-labelledby="now-title">
         <div class="card-heading">
           <h2 id="now-title">Now on glasses</h2>
@@ -40,6 +57,9 @@
         <button type="button" data-action="cycle-feed">Switch feed</button>
         <button type="button" data-action="toggle-detail">Thread</button>
       </section>
+      <button id="forget-device" class="forget-device" type="button" hidden>
+        Forget access key
+      </button>
       <p class="privacy">The glasses app never receives X cookies or a generic relay URL.</p>
     </main>
     <script type="module" src="/src/main.ts"></script>

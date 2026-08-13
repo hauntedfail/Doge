@@ -19,10 +19,11 @@ async function get(path: string): Promise<unknown> {
   if (accessToken) headers.set('authorization', `Bearer ${accessToken}`)
   const response = await fetch(`${apiBase()}${path}`, {
     method: 'GET',
-    credentials: 'include',
+    credentials: 'omit',
     headers,
   })
   const json = (await response.json()) as unknown
+  if (response.status === 401) throw new Error('Access key required on this iPhone')
   if (!response.ok) throw new Error(`Gateway returned HTTP ${response.status}`)
   return json
 }

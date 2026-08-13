@@ -59,11 +59,47 @@ h2 {
   color: #ff7b72;
 }
 .card,
-.controls {
+.controls,
+.pairing {
   border: 1px solid rgba(157, 222, 179, 0.18);
   border-radius: 20px;
   background: rgba(17, 32, 26, 0.78);
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
+}
+.pairing {
+  margin-bottom: 14px;
+  padding: 20px 22px;
+}
+.pairing[hidden],
+.forget-device[hidden] {
+  display: none;
+}
+.pairing p {
+  color: #91a097;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.pairing label {
+  display: block;
+  margin-bottom: 6px;
+  color: #a8b8ae;
+  font-size: 12px;
+}
+.pairing input {
+  width: 100%;
+  margin-bottom: 10px;
+  border: 1px solid #357b50;
+  border-radius: 10px;
+  padding: 12px;
+  color: #f4f7f3;
+  background: #09140e;
+  font:
+    14px/1.2 ui-monospace,
+    monospace;
+}
+.pairing-message {
+  min-height: 1.5em;
+  margin-bottom: 0 !important;
 }
 .card {
   padding: 22px;
@@ -138,6 +174,13 @@ button {
 button:active {
   transform: translateY(1px);
   background: #1f432d;
+}
+.forget-device {
+  width: 100%;
+  margin-top: 10px;
+  border-color: rgba(255, 123, 114, 0.35);
+  color: #ffb4ad;
+  background: transparent;
 }
 .privacy {
   color: #718078;

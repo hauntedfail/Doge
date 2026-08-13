@@ -1,7 +1,7 @@
 {
   "package_id": "ru.h1ka.g2xreader",
   "edition": "202601",
-  "name": "G2 X Reader",
+  "name": "Doge",
   "version": "0.1.0",
   "min_app_version": "2.2.6",
   "min_sdk_version": "0.0.13",
@@ -9,7 +9,7 @@
   "permissions": [
     {
       "name": "network",
-      "desc": "Load read-only X timelines from the local G2 Reader gateway.",
+      "desc": "Load read-only X timelines from the Doge gateway.",
       "whitelist": ["http://127.0.0.1:8787"]
     }
   ],

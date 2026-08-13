@@ -23,6 +23,7 @@ describe('renderGlassesText', () => {
     const output = renderGlassesText(state)
     expect(output.length).toBeLessThanOrEqual(1000)
     expect(output).not.toContain('\u0000')
+    expect(output).toContain('DOGE / HOME')
     expect(output).toContain('@ada')
   })
 })

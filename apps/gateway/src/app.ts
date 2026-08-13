@@ -9,6 +9,7 @@ export interface AppOptions {
   source: TimelineSource
   bearerToken: string | undefined
   allowedOrigins: string[]
+  allowBearerCors?: boolean
 }
 
 const timelineQuery = z.object({
@@ -26,14 +27,16 @@ function authorised(header: string | undefined, expected: string): boolean {
 }
 
 export function createApp(options: AppOptions): Hono {
+  if (options.allowBearerCors && !options.bearerToken) {
+    throw new Error('allowBearerCors requires bearerToken')
+  }
   const app = new Hono()
   app.use('*', secureHeaders({ crossOriginResourcePolicy: 'cross-origin' }))
   app.use('/api/*', async (context, next) => {
     context.header('cache-control', 'private, no-store')
     const origin = context.req.header('origin')
-    if (origin && options.allowedOrigins.includes(origin)) {
+    if (origin && (options.allowedOrigins.includes(origin) || options.allowBearerCors)) {
       context.header('access-control-allow-origin', origin)
-      context.header('access-control-allow-credentials', 'true')
       context.header('vary', 'Origin')
       context.header('access-control-allow-methods', 'GET, OPTIONS')
       context.header('access-control-allow-headers', 'Authorization, Content-Type')

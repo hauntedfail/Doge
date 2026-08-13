@@ -27,6 +27,7 @@ const app = createApp({
   source: sourceFromEnvironment(),
   bearerToken: process.env.GATEWAY_BEARER_TOKEN || undefined,
   allowedOrigins,
+  allowBearerCors: process.env.ALLOW_BEARER_CORS === '1',
 })
 
 const staticDir = resolve(process.env.STATIC_DIR ?? 'apps/g2/dist')
@@ -48,5 +49,5 @@ const fetch =
     : app.fetch
 
 serve({ fetch, hostname: host, port }, (info) => {
-  console.log(`Even G2 X Reader gateway listening on http://${info.address}:${info.port}`)
+  console.log(`Doge gateway listening on http://${info.address}:${info.port}`)
 })

@@ -23,7 +23,7 @@ const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
 manifest.permissions = [
   {
     name: 'network',
-    desc: 'Load read-only X timelines from the private G2 Reader gateway.',
+    desc: 'Load read-only X timelines from the private Doge gateway.',
     whitelist: [origin.origin],
   },
 ]

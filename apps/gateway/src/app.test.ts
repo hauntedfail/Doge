@@ -53,7 +53,7 @@ describe('gateway', () => {
       headers: { origin: 'http://127.0.0.1:5173' },
     })
     expect(response.headers.get('access-control-allow-origin')).toBe('http://127.0.0.1:5173')
-    expect(response.headers.get('access-control-allow-credentials')).toBe('true')
+    expect(response.headers.get('access-control-allow-credentials')).toBeNull()
     expect(response.headers.get('cross-origin-resource-policy')).toBe('cross-origin')
   })
 
@@ -72,5 +72,45 @@ describe('gateway', () => {
     })
     expect(response.status).toBe(204)
     expect(response.headers.get('access-control-allow-origin')).toBe('http://127.0.0.1:5173')
+  })
+
+  it('reflects an installed app origin only when bearer CORS is enabled with authentication', async () => {
+    const app = createApp({
+      source: source(),
+      bearerToken: 'secret',
+      allowedOrigins: [],
+      allowBearerCors: true,
+    })
+    const response = await app.request('/api/v1/timeline?feed=home', {
+      headers: {
+        authorization: 'Bearer secret',
+        origin: 'capacitor://localhost',
+      },
+    })
+    expect(response.status).toBe(200)
+    expect(response.headers.get('access-control-allow-origin')).toBe('capacitor://localhost')
+
+    const preflight = await app.request('/api/v1/timeline?feed=home', {
+      method: 'OPTIONS',
+      headers: {
+        origin: 'capacitor://localhost',
+        'access-control-request-method': 'GET',
+        'access-control-request-headers': 'authorization',
+      },
+    })
+    expect(preflight.status).toBe(204)
+    expect(preflight.headers.get('access-control-allow-origin')).toBe('capacitor://localhost')
+    expect(preflight.headers.get('access-control-allow-headers')).toContain('Authorization')
+  })
+
+  it('refuses bearer CORS without a gateway access key', () => {
+    expect(() =>
+      createApp({
+        source: source(),
+        bearerToken: undefined,
+        allowedOrigins: [],
+        allowBearerCors: true,
+      }),
+    ).toThrow('allowBearerCors requires bearerToken')
   })
 })

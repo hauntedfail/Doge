@@ -8,8 +8,8 @@
     "build": "vite build",
     "check": "tsc --noEmit",
     "dev": "vite --host 127.0.0.1",
-    "pack": "evenhub pack app.json dist -o g2-x-reader.ehpk",
-    "pack:production": "evenhub pack app.production.json dist -o g2-x-reader.ehpk"
+    "pack": "evenhub pack app.json dist -o doge.ehpk",
+    "pack:production": "evenhub pack app.production.json dist -o doge.ehpk"
   },
   "dependencies": {
     "@even-g2-x-reader/contracts": "0.1.0",

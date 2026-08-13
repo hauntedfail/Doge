@@ -1,11 +1,11 @@
-# Even G2 X Reader
+# Doge for Even G2
 
 Even G2でXのHome、Following、Bookmarks、threadを読むための、TypeScript製read-onlyアプリです。
 
 X API keyは使いません。Mac上のログイン済みブラウザを[`twitter_api_safe_relay`](https://github.com/fa0311/twitter_api_safe_relay)が操作し、このプロジェクトのgatewayが必要な読み取り結果だけを固定DTOへ変換してEven G2へ渡します。
 
 > [!IMPORTANT]
-> `twitter_api_safe_relay`をインターネットへ直接公開しないでください。このアプリにも投稿、Like、Repost、Followなどのwrite endpointはありません。Cloudflare Tunnelと認証は次の段階で構成します。それまではgatewayもlocalhostのまま使ってください。
+> `twitter_api_safe_relay`をインターネットへ直接公開しないでください。このアプリにも投稿、Like、Repost、Followなどのwrite endpointはありません。本番構成でもTunnelへ接続するのはBearer認証付きread-only gatewayだけです。
 
 ## 構成
 
@@ -61,7 +61,7 @@ npm run verify
 npm run pack:g2
 ```
 
-生成物は`apps/g2/g2-x-reader.ehpk`です。`.ehpk`とbuild成果物はGit管理しません。
+生成物は`apps/g2/doge.ehpk`です。`.ehpk`とbuild成果物はGit管理しません。
 
 ## live X relayへ切り替える
 
@@ -107,14 +107,14 @@ npm run preview:live
 
 このcommandは256-bitの一時tokenを生成し、Bearer認証を必須にしたread-only gatewayと使い捨てCloudflare Quick Tunnelを起動します。tokenはterminalへ出力せず、権限`600`の一時QR画像にだけ埋め込みます。URL fragmentはCloudflareへ送られず、Even WebViewがsession内でtokenを取り込み、API requestのAuthorization headerへ変換します。`Ctrl-C`でgatewayとTunnelを終了し、QR画像を削除してtokenを失効させます。
 
-Quick Tunnelは実機開発専用で、可用性保証や固定URLはありません。本番運用では`h1ka.ru`のnamed TunnelとCloudflare Accessへ置き換えます。
+Quick Tunnelは実機開発専用で、可用性保証や固定URLはありません。本番運用では`doge.h1ka.ru`のnamed Tunnelを使います。
 
-## 外部URLを設定する（次の段階）
+## Doge本番構成
 
-最終subdomainが決まったら、bare HTTPS originを指定します。
+本番originは`https://doge.h1ka.ru`です。manifestとfrontend環境を再生成する場合:
 
 ```bash
-npm run configure:origin -- https://YOUR-SUBDOMAIN.h1ka.ru
+npm run configure:origin -- https://doge.h1ka.ru
 npm run build
 npm run pack:g2:production
 ```
@@ -124,16 +124,35 @@ npm run pack:g2:production
 - `apps/g2/.env.production.local` — frontendのgateway origin
 - `apps/g2/app.production.json` — Even Hub network whitelist
 
-Cloudflare Tunnelで公開するのはgatewayの`127.0.0.1:8787`だけです。Safe Relayのport `6900`はTunnelへ接続しません。認証方式を決めるまでは外部公開しないでください。
+Cloudflare Tunnelで公開するのはgatewayの`127.0.0.1:8787`だけです。Safe Relayのport `6900`はTunnelへ接続しません。
 
-gatewayのCORSは`ALLOWED_ORIGINS`に完全一致したWebView originだけを許可します。simulatorでは既定値で足ります。実機packageのoriginはEven App側の配信方式で変わり得るため、最初の接続時だけ`DEBUG_REQUESTS=1`でmethod・path・Originを確認し、その値を明示設定します。`*`にはしません。
+初回にDoge access keyを生成し、クリップボードへコピーします。key自体はterminalへ表示せず、`var/doge-access-key`へ権限`600`で保存します。
 
 ```bash
-X_SOURCE=relay \
-TWITTER_RELAY_BASE_URL=http://127.0.0.1:6900 \
-ALLOWED_ORIGINS=https://OBSERVED-WEBVIEW-ORIGIN.example \
-npm run start --workspace @even-g2-x-reader/gateway
+npm run production:key
 ```
+
+Even AppのDoge画面で一度だけ貼り付けて`Pair Doge`を押します。keyはそのiPhoneのWebView local storageへ保存され、`Forget access key`を押すまで再起動後も使われます。X cookieはMacから出ません。
+
+Safe Relayが起動中であることを確認して本番gatewayとnamed Tunnelを起動します。
+
+```bash
+npm run production:start
+```
+
+外出中もMacの電源・ネット接続、Safe Relay、`production:start`を維持してください。現在の構成ではiPhoneとG2だけでXへ直接接続するわけではなく、自宅Macがread-only backendです。
+
+## Private buildとBeta build
+
+推奨は**Beta build**です。Betaは公開Store審査なしで、自分のEven accountだけをtester groupへ追加できます。公開版と同じlifecycleで動き、phone lockやbackground遷移も含めた外出利用を試せます。Private buildも自分だけでinstallできますが、配布できず、lifecycleは公開版と完全には同じではありません。
+
+1. `npm run verify && npm run pack:g2:production`
+2. Even HubでBeta tester groupを作り、自分のEven account emailを追加
+3. `apps/g2/doge.ehpk`をbuildとしてuploadし、そのgroupへpush
+4. iPhoneのEven Appで`Me → Beta tester → Doge → Install`
+5. glasses homeからDogeを起動し、phone画面でaccess keyを一度だけpair
+
+公開審査が発生するのはStoreへsubmissionする段階です。詳細はEven Hub公式の[Beta testing](https://hub.evenrealities.com/docs/test/beta-testing)と[Private testing](https://hub.evenrealities.com/docs/test/private-testing)を参照してください。
 
 ## Security defaults
 
@@ -145,7 +164,8 @@ npm run start --workspace @even-g2-x-reader/gateway
 - upstream timeout 15秒、response上限5 MB
 - responseは固定DTOへ変換し、X cookieや内部headerをclientへ返さない
 - production responseは`no-store`、security headers付き
-- optional bearer tokenをgatewayで利用可能。ただしtokenをG2 bundleへ埋め込まないこと
+- 本番gatewayはBearer token必須。tokenを`.ehpk`へ埋め込まず、各iPhoneで一度だけpair
+- installed WebViewのoriginが変わってもBearer認証を必須にしたままCORS responseを返す
 
 ## Gitに入れないもの
 

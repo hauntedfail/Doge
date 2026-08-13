@@ -9,6 +9,7 @@ import {
   type EvenHubEvent,
 } from '@evenrealities/even_hub_sdk'
 import { loadThread, loadTimeline } from './api.js'
+import { browserAccessToken, clearBrowserAccessToken, saveBrowserAccessToken } from './auth.js'
 import { registerBackgroundState } from './background-state.js'
 import { classifyInput, type InputAction } from './input.js'
 import { renderGlassesText } from './presentation.js'
@@ -21,7 +22,7 @@ import {
 } from './reader-state.js'
 
 const CONTAINER_ID = 1
-const CONTAINER_NAME = 'x_reader'
+const CONTAINER_NAME = 'doge_reader'
 let state: ReaderState = initialReaderState()
 let updateGlasses: (() => Promise<void>) | undefined
 let stateRevision = 0
@@ -53,6 +54,8 @@ function updatePhone(): void {
     element('position')!.textContent = post
       ? `${state.index + 1} / ${state.posts.length} · ${post.likeCount} likes`
       : '—'
+  element('pairing')?.toggleAttribute('hidden', Boolean(browserAccessToken()))
+  element('forget-device')?.toggleAttribute('hidden', !browserAccessToken())
 }
 
 async function render(): Promise<void> {
@@ -153,6 +156,27 @@ registerBackgroundState(
 for (const button of document.querySelectorAll<HTMLButtonElement>('button[data-action]')) {
   button.addEventListener('click', () => void handleAction(button.dataset.action as InputAction))
 }
+element('pairing')?.addEventListener('submit', (event) => {
+  event.preventDefault()
+  const input = element('access-key')
+  const message = element('pairing-message')
+  if (!(input instanceof HTMLInputElement)) return
+  if (!saveBrowserAccessToken(input.value)) {
+    if (message) message.textContent = 'Enter the 43-character Doge access key.'
+    return
+  }
+  input.value = ''
+  if (message) message.textContent = 'This iPhone is paired with Doge.'
+  stateRevision += 1
+  state = initialReaderState()
+  void loadCurrentFeed()
+})
+element('forget-device')?.addEventListener('click', () => {
+  clearBrowserAccessToken()
+  stateRevision += 1
+  state = { ...initialReaderState(), status: 'error', error: 'Access key required on this iPhone' }
+  void render()
+})
 updatePhone()
 
 async function startGlasses(): Promise<void> {
