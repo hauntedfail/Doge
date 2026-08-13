@@ -53,13 +53,14 @@ function cloneOperation(operation: RelayOperation): RelayOperation {
 function updateVariables(
   operation: RelayOperation,
   cursor: string | undefined,
+  seenTweetIds: string[],
   postId?: string,
 ): RelayOperation {
   const copy = cloneOperation(operation)
   if (copy.data) {
     copy.data.variables.count = 20
     copy.data.variables.includePromotedContent = false
-    copy.data.variables.seenTweetIds = []
+    copy.data.variables.seenTweetIds = seenTweetIds
     if (cursor) copy.data.variables.cursor = cursor
     else delete copy.data.variables.cursor
     if (postId) copy.data.variables.focalTweetId = postId
@@ -69,6 +70,7 @@ function updateVariables(
   const variables = JSON.parse(copy.params.variables) as Record<string, unknown>
   variables.count = 20
   variables.includePromotedContent = false
+  if ('seenTweetIds' in variables) variables.seenTweetIds = seenTweetIds
   if (cursor) variables.cursor = cursor
   else delete variables.cursor
   if (postId) variables.focalTweetId = postId
@@ -150,11 +152,16 @@ export class RelayTimelineSource implements TimelineSource {
     return readLimited(await fetch(url, init))
   }
 
-  async #request(name: OperationName, cursor?: string, postId?: string): Promise<unknown> {
+  async #request(
+    name: OperationName,
+    cursor?: string,
+    seenTweetIds: string[] = [],
+    postId?: string,
+  ): Promise<unknown> {
     const catalog = await loadRelayCatalog(this.#catalogPath)
     const fromCatalog = catalog.get(name)
     if (!fromCatalog) throw new Error(`relay operation unavailable: ${name}`)
-    return this.#send(name, updateVariables(fromCatalog, cursor, postId))
+    return this.#send(name, updateVariables(fromCatalog, cursor, seenTweetIds, postId))
   }
 
   async #requestWithVariables(
@@ -190,12 +197,12 @@ export class RelayTimelineSource implements TimelineSource {
     return raw
   }
 
-  async list(feed: Feed, cursor?: string): Promise<TimelinePage> {
-    return parseTimeline(await this.#request(operationByFeed[feed], cursor), feed)
+  async list(feed: Feed, cursor?: string, seenTweetIds: string[] = []): Promise<TimelinePage> {
+    return parseTimeline(await this.#request(operationByFeed[feed], cursor, seenTweetIds), feed)
   }
 
   async thread(postId: string): Promise<Thread> {
-    return parseThread(await this.#request('TweetDetail', undefined, postId), postId)
+    return parseThread(await this.#request('TweetDetail', undefined, [], postId), postId)
   }
 
   async profile(handle: string, cursor?: string): Promise<ProfilePage> {

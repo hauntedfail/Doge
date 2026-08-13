@@ -161,7 +161,7 @@ describe('relay security boundary', () => {
     )
     const source = new RelayTimelineSource('http://127.0.0.1:6900', await catalogPath())
 
-    await source.list('home')
+    await source.list('home', undefined, ['11', '22'])
     await source.thread('42')
 
     expect(requests[0]?.url.pathname).toBe('/i/api/graphql/query/HomeTimeline')
@@ -170,7 +170,7 @@ describe('relay security boundary', () => {
     expect(homeBody.variables).toMatchObject({
       count: 20,
       includePromotedContent: false,
-      seenTweetIds: [],
+      seenTweetIds: ['11', '22'],
     })
     expect(homeBody.variables).not.toHaveProperty('cursor')
 

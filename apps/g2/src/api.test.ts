@@ -36,6 +36,22 @@ describe('API loading progress', () => {
     expect(stages).toEqual(['downloading', 'preparing'])
   })
 
+  it('sends only explicitly viewed post IDs with a timeline request', async () => {
+    vi.stubGlobal('window', {
+      location: { hash: '', port: '5173', origin: 'http://127.0.0.1:5173' },
+      localStorage: storage,
+      sessionStorage: storage,
+    })
+    const fetchMock = vi.fn(async (_input: string | URL | Request) =>
+      Response.json({ feed: 'home', posts: [], nextCursor: null }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await loadTimeline('home', undefined, undefined, ['11', '22'])
+
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('seen=11%2C22')
+  })
+
   it('reports image response and body download milestones', async () => {
     vi.stubGlobal('window', {
       location: { hash: '', port: '5173', origin: 'http://127.0.0.1:5173' },

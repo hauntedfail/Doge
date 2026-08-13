@@ -78,9 +78,12 @@ export async function loadTimeline(
   feed: Feed,
   cursor?: string,
   onProgress?: DataLoadProgress,
+  viewedPostIds: readonly string[] = [],
 ): Promise<TimelinePage> {
   const query = new URLSearchParams({ feed })
   if (cursor) query.set('cursor', cursor)
+  const seen = [...new Set(viewedPostIds.filter((id) => /^\d{1,24}$/u.test(id)))].slice(-200)
+  if (seen.length > 0) query.set('seen', seen.join(','))
   return timelinePageSchema.parse(await get(`/api/v1/timeline?${query}`, onProgress))
 }
 

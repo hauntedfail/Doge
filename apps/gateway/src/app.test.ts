@@ -48,8 +48,12 @@ function source(): TimelineSource {
 
 describe('gateway', () => {
   it('only exposes validated read routes', async () => {
-    const app = createApp({ source: source(), bearerToken: undefined, allowedOrigins: [] })
+    const timelineSource = source()
+    const app = createApp({ source: timelineSource, bearerToken: undefined, allowedOrigins: [] })
     expect((await app.request('/api/v1/timeline?feed=home')).status).toBe(200)
+    expect((await app.request('/api/v1/timeline?feed=home&seen=11%2C22')).status).toBe(200)
+    expect(timelineSource.list).toHaveBeenLastCalledWith('home', undefined, ['11', '22'])
+    expect((await app.request('/api/v1/timeline?feed=home&seen=not-an-id')).status).toBe(400)
     expect((await app.request('/api/v1/timeline?feed=likes')).status).toBe(400)
     expect((await app.request('/api/v1/posts/1/thread')).status).toBe(200)
     expect((await app.request('/api/v1/users/ada/profile')).status).toBe(200)

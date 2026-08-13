@@ -25,6 +25,7 @@ export interface ReaderState {
   status: ReaderStatus
   error: string | null
   returnTo: ReturnContext | null
+  viewedPostIds: string[]
 }
 
 export type ReaderAction =
@@ -36,6 +37,7 @@ export type ReaderAction =
   | { type: 'select-feed'; feed: Feed }
   | { type: 'thread-loaded'; posts: Post[] }
   | { type: 'close-thread' }
+  | { type: 'post-viewed'; postId: string }
   | { type: 'reaction-updated'; postId: string; reaction: Reaction; active: boolean }
   | { type: 'error'; message: string }
 
@@ -53,7 +55,10 @@ const snapshotSchema = z.object({
   status: z.enum(['loading', 'ready', 'error']).optional(),
   error: z.string().nullable().optional(),
   returnTo: returnContextSchema.nullable().optional(),
+  viewedPostIds: z.array(z.string().min(1).max(64)).max(200).optional(),
 })
+
+const MAX_VIEWED_POST_IDS = 200
 
 function newestFirst(posts: Post[]): Post[] {
   return posts
@@ -70,6 +75,23 @@ function newestFirst(posts: Post[]): Post[] {
     .map(({ post }) => post)
 }
 
+function uniquePosts(posts: Post[]): Post[] {
+  const unique = new Map<string, Post>()
+  for (const post of posts) {
+    if (!unique.has(post.id)) unique.set(post.id, post)
+  }
+  return [...unique.values()]
+}
+
+function unseenFirst(posts: Post[], viewedPostIds: string[]): Post[] {
+  const viewed = new Set(viewedPostIds)
+  const ordered = newestFirst(uniquePosts(posts))
+  return [
+    ...ordered.filter((post) => !viewed.has(post.id)),
+    ...ordered.filter((post) => viewed.has(post.id)),
+  ]
+}
+
 export function initialReaderState(): ReaderState {
   return {
     feed: 'home',
@@ -80,6 +102,7 @@ export function initialReaderState(): ReaderState {
     status: 'loading',
     error: null,
     returnTo: null,
+    viewedPostIds: [],
   }
 }
 
@@ -126,7 +149,7 @@ export function reduceReaderState(state: ReaderState, action: ReaderAction): Rea
     case 'timeline-loaded':
       return {
         ...state,
-        posts: newestFirst(action.posts),
+        posts: unseenFirst(action.posts, state.viewedPostIds),
         index: 0,
         nextCursor: action.nextCursor,
         mode: 'timeline',
@@ -137,7 +160,7 @@ export function reduceReaderState(state: ReaderState, action: ReaderAction): Rea
     case 'timeline-appended':
       return {
         ...state,
-        posts: newestFirst([...state.posts, ...action.posts]),
+        posts: newestFirst(uniquePosts([...state.posts, ...action.posts])),
         nextCursor: action.nextCursor,
         status: 'ready',
         error: null,
@@ -147,7 +170,7 @@ export function reduceReaderState(state: ReaderState, action: ReaderAction): Rea
     case 'previous':
       return { ...state, index: Math.max(0, state.index - 1) }
     case 'select-feed':
-      return { ...initialReaderState(), feed: action.feed }
+      return { ...initialReaderState(), feed: action.feed, viewedPostIds: state.viewedPostIds }
     case 'thread-loaded':
       return {
         ...state,
@@ -171,6 +194,14 @@ export function reduceReaderState(state: ReaderState, action: ReaderAction): Rea
         status: 'ready',
         error: null,
         returnTo: null,
+      }
+    case 'post-viewed':
+      return {
+        ...state,
+        viewedPostIds: [
+          ...state.viewedPostIds.filter((postId) => postId !== action.postId),
+          action.postId,
+        ].slice(-MAX_VIEWED_POST_IDS),
       }
     case 'reaction-updated': {
       const update = (post: Post) =>
@@ -210,5 +241,6 @@ export function restoreReaderSnapshot(current: ReaderState, saved: unknown): Rea
     status: parsed.data.status ?? 'ready',
     error: parsed.data.error ?? null,
     returnTo: parsed.data.returnTo ?? null,
+    viewedPostIds: parsed.data.viewedPostIds ?? [],
   }
 }

@@ -22,6 +22,12 @@ export interface AppOptions {
 const timelineQuery = z.object({
   feed: feedSchema,
   cursor: z.string().min(1).max(2048).optional(),
+  seen: z
+    .string()
+    .min(1)
+    .max(5000)
+    .regex(/^\d{1,24}(,\d{1,24})*$/u)
+    .optional(),
 })
 const postId = z.string().regex(/^\d{1,24}$/u)
 const userHandle = z.string().regex(/^[A-Za-z0-9_]{1,15}$/u)
@@ -72,7 +78,8 @@ export function createApp(options: AppOptions): Hono {
         400,
       )
     }
-    return context.json(await options.source.list(query.data.feed, query.data.cursor))
+    const seenTweetIds = query.data.seen ? [...new Set(query.data.seen.split(','))].slice(-200) : []
+    return context.json(await options.source.list(query.data.feed, query.data.cursor, seenTweetIds))
   })
   app.get('/api/v1/posts/:id/thread', async (context) => {
     const id = postId.safeParse(context.req.param('id'))

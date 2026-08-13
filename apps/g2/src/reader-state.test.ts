@@ -38,8 +38,32 @@ describe('reader state', () => {
       posts,
       nextCursor: 'next',
     })
-    const selected = reduceReaderState(loaded, { type: 'select-feed', feed: 'bookmarks' })
-    expect(selected).toEqual({ ...initialReaderState(), feed: 'bookmarks' })
+    const viewed = reduceReaderState(loaded, { type: 'post-viewed', postId: '1' })
+    const selected = reduceReaderState(viewed, { type: 'select-feed', feed: 'bookmarks' })
+    expect(selected).toEqual({
+      ...initialReaderState(),
+      feed: 'bookmarks',
+      viewedPostIds: ['1'],
+    })
+  })
+
+  it('marks only posts actually rendered as viewed and prioritises unseen posts on reload', () => {
+    let state = reduceReaderState(initialReaderState(), {
+      type: 'timeline-loaded',
+      posts,
+      nextCursor: null,
+    })
+
+    expect(state.viewedPostIds).toEqual([])
+    state = reduceReaderState(state, { type: 'post-viewed', postId: '1' })
+    expect(state.viewedPostIds).toEqual(['1'])
+
+    state = reduceReaderState(state, {
+      type: 'timeline-loaded',
+      posts: [posts[0]!, { ...posts[1]!, createdAt: '2026-08-11T00:00:00.000Z' }],
+      nextCursor: null,
+    })
+    expect(state.posts.map(({ id }) => id)).toEqual(['2', '1'])
   })
 
   it('orders refreshed timeline posts newest first', () => {
@@ -73,6 +97,30 @@ describe('reader state', () => {
     expect(restored.feed).toBe('bookmarks')
     expect(restored.posts).toHaveLength(2)
     expect(restoreReaderSnapshot(restored, { feed: 'likes' }).feed).toBe('bookmarks')
+  })
+
+  it('restores viewed history across an Even Hub background migration', () => {
+    const viewed = reduceReaderState(initialReaderState(), { type: 'post-viewed', postId: '1' })
+
+    const restored = restoreReaderSnapshot(initialReaderState(), viewed)
+
+    expect(restored.viewedPostIds).toEqual(['1'])
+  })
+
+  it('deduplicates posts returned again on a cursor page', () => {
+    const loaded = reduceReaderState(initialReaderState(), {
+      type: 'timeline-loaded',
+      posts,
+      nextCursor: 'next',
+    })
+
+    const appended = reduceReaderState(loaded, {
+      type: 'timeline-appended',
+      posts: [posts[1]!, { ...posts[0]!, id: '3' }],
+      nextCursor: null,
+    })
+
+    expect(appended.posts.map(({ id }) => id).sort()).toEqual(['1', '2', '3'])
   })
 
   it('updates reaction state and visible counts exactly once across thread copies', () => {

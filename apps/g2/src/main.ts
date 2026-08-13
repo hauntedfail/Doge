@@ -70,6 +70,7 @@ import {
   type ReaderState,
 } from './reader-state.js'
 import { shouldReloadTimeline } from './timeline-navigation.js'
+import { loadViewHistory, saveViewHistory } from './view-history.js'
 
 const POSITION_ID = 1
 const AUTHOR_ID = 2
@@ -162,7 +163,10 @@ const METRIC_TEXT: Readonly<Record<MetricIconKind, MetricText>> = {
     countName: BOOKMARK_COUNT_NAME,
   },
 }
-let state: ReaderState = initialReaderState()
+let state: ReaderState = {
+  ...initialReaderState(),
+  viewedPostIds: loadViewHistory(window.localStorage),
+}
 let appLayer: AppLayer = 'view-select'
 let bodyPage = 0
 let updateGlasses: ((epoch: number) => Promise<void>) | undefined
@@ -213,6 +217,7 @@ function profileReaderState(): ReaderState | null {
     status: profileState.status,
     error: profileState.error,
     returnTo: null,
+    viewedPostIds: state.viewedPostIds,
   }
 }
 
@@ -371,7 +376,20 @@ function updatePhone(): void {
 async function render(): Promise<void> {
   const epoch = latestRenderEpoch.issue()
   updatePhone()
-  await updateGlasses?.(epoch)
+  const glassesUpdater = updateGlasses
+  if (!glassesUpdater) return
+  await glassesUpdater(epoch)
+  if (!latestRenderEpoch.isCurrent(epoch) || loadingProgress) return
+  const viewedPost =
+    appLayer === 'reader' && state.status === 'ready'
+      ? state.posts[state.index]
+      : appLayer === 'profile' && profileState?.status === 'ready'
+        ? profilePost()
+        : undefined
+  if (viewedPost) {
+    state = reduceReaderState(state, { type: 'post-viewed', postId: viewedPost.id })
+    saveViewHistory(window.localStorage, state.viewedPostIds)
+  }
 }
 
 async function showLoadingStage(
@@ -391,10 +409,15 @@ async function loadCurrentFeed(operation: LoadingOperation = 'initial'): Promise
   state = reduceReaderState(state, { type: 'timeline-loading' })
   await showLoadingStage(operation, target, 'connecting')
   try {
-    const page = await loadTimeline(feed, undefined, async (stage) => {
-      if (revision !== stateRevision || feed !== state.feed) return
-      await showLoadingStage(operation, target, stage)
-    })
+    const page = await loadTimeline(
+      feed,
+      undefined,
+      async (stage) => {
+        if (revision !== stateRevision || feed !== state.feed) return
+        await showLoadingStage(operation, target, stage)
+      },
+      state.viewedPostIds,
+    )
     if (revision !== stateRevision || feed !== state.feed) return
     await showLoadingStage(operation, target, 'rendering')
     state = reduceReaderState(state, {
@@ -661,7 +684,7 @@ async function handleAction(action: ReaderCommand): Promise<void> {
     state.mode === 'timeline'
   ) {
     try {
-      const page = await loadTimeline(state.feed, state.nextCursor)
+      const page = await loadTimeline(state.feed, state.nextCursor, undefined, state.viewedPostIds)
       state = reduceReaderState(state, {
         type: 'timeline-appended',
         posts: page.posts,
