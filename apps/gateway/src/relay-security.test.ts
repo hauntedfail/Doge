@@ -20,6 +20,27 @@ async function catalogPath(pathForTweetDetail = '/graphql/query/TweetDetail'): P
     },
     { method: 'GET', path: '/graphql/query/Bookmarks', headers: {}, params: { variables: '{}' } },
     { method: 'GET', path: pathForTweetDetail, headers: {}, params: { variables: '{}' } },
+    { method: 'POST', path: '/graphql/query/FavoriteTweet', headers: {}, data: { variables: {} } },
+    {
+      method: 'POST',
+      path: '/graphql/query/UnfavoriteTweet',
+      headers: {},
+      data: { variables: {} },
+    },
+    { method: 'POST', path: '/graphql/query/CreateRetweet', headers: {}, data: { variables: {} } },
+    { method: 'POST', path: '/graphql/query/DeleteRetweet', headers: {}, data: { variables: {} } },
+    {
+      method: 'POST',
+      path: '/graphql/query/CreateBookmark',
+      headers: {},
+      data: { variables: {} },
+    },
+    {
+      method: 'POST',
+      path: '/graphql/query/DeleteBookmark',
+      headers: {},
+      data: { variables: {} },
+    },
     { method: 'POST', path: '/graphql/query/CreateTweet', headers: {}, data: { variables: {} } },
   ]
   const path = join(directory, 'requests.ndjson')
@@ -35,14 +56,68 @@ afterEach(async () => {
 })
 
 describe('relay security boundary', () => {
-  it('selects only the four approved read operations from the catalog', async () => {
+  it('selects only the approved read and scoped reaction operations from the catalog', async () => {
     const catalog = await loadRelayCatalog(await catalogPath())
     expect([...catalog.keys()]).toEqual([
       'HomeTimeline',
       'HomeLatestTimeline',
       'Bookmarks',
       'TweetDetail',
+      'FavoriteTweet',
+      'UnfavoriteTweet',
+      'CreateRetweet',
+      'DeleteRetweet',
+      'CreateBookmark',
+      'DeleteBookmark',
     ])
+  })
+
+  it.each([
+    ['like', true, 'FavoriteTweet', { tweet_id: '42' }],
+    ['like', false, 'UnfavoriteTweet', { tweet_id: '42' }],
+    ['repost', true, 'CreateRetweet', { tweet_id: '42', dark_request: false }],
+    ['repost', false, 'DeleteRetweet', { source_tweet_id: '42', dark_request: false }],
+    ['bookmark', true, 'CreateBookmark', { tweet_id: '42' }],
+    ['bookmark', false, 'DeleteBookmark', { tweet_id: '42' }],
+  ] as const)(
+    'maps %s active=%s to %s with a minimal payload',
+    async (reaction, active, operation, variables) => {
+      const requests: Array<{ url: URL; init: RequestInit }> = []
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (input: string | URL | Request, init: RequestInit = {}) => {
+          requests.push({ url: new URL(String(input)), init })
+          return new Response(JSON.stringify({ data: {} }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          })
+        }),
+      )
+      const source = new RelayTimelineSource('http://127.0.0.1:6900', await catalogPath())
+
+      await expect(source.setReaction('42', reaction, active)).resolves.toEqual({
+        postId: '42',
+        reaction,
+        active,
+      })
+      expect(requests).toHaveLength(1)
+      expect(requests[0]?.url.pathname).toBe(`/i/api/graphql/query/${operation}`)
+      expect(JSON.parse(String(requests[0]?.init.body)).variables).toEqual(variables)
+    },
+  )
+
+  it('rejects an HTTP-200 GraphQL mutation error', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ errors: [{ message: 'not authorised' }] }), {
+            status: 200,
+          }),
+      ),
+    )
+    const source = new RelayTimelineSource('http://127.0.0.1:6900', await catalogPath())
+    await expect(source.setReaction('42', 'like', true)).rejects.toThrow('not authorised')
   })
 
   it('rejects a traversal-shaped operation path', async () => {

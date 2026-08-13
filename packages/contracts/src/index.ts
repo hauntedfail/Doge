@@ -3,6 +3,9 @@ import { z } from 'zod'
 export const feedSchema = z.enum(['home', 'following', 'bookmarks'])
 export type Feed = z.infer<typeof feedSchema>
 
+export const reactionSchema = z.enum(['like', 'repost', 'bookmark'])
+export type Reaction = z.infer<typeof reactionSchema>
+
 export const postImageSchema = z.object({
   kind: z.enum(['photo', 'video_thumbnail', 'animated_gif_thumbnail']).default('photo'),
   url: z.url(),
@@ -24,6 +27,9 @@ export const postSchema = z.object({
   likeCount: z.number().int().nonnegative(),
   viewCount: z.number().int().nonnegative().nullable(),
   images: z.array(postImageSchema).max(4).default([]),
+  viewerHasLiked: z.boolean().default(false),
+  viewerHasReposted: z.boolean().default(false),
+  viewerHasBookmarked: z.boolean().default(false),
 })
 export type Post = z.infer<typeof postSchema>
 
@@ -39,6 +45,13 @@ export const threadSchema = z.object({
   posts: z.array(postSchema),
 })
 export type Thread = z.infer<typeof threadSchema>
+
+export const reactionResultSchema = z.object({
+  postId: z.string().min(1),
+  reaction: reactionSchema,
+  active: z.boolean(),
+})
+export type ReactionResult = z.infer<typeof reactionResultSchema>
 
 export const apiErrorSchema = z.object({
   error: z.object({

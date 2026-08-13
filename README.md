@@ -1,20 +1,20 @@
 # Doge for Even G2
 
-Even G2でXのHome、Following、Bookmarks、threadを読むための、TypeScript製read-onlyアプリです。
+Even G2でXのHome、Following、Bookmarks、threadを読み、Like、Repost、Bookmarkを切り替えるTypeScript製アプリです。
 
-X API keyは使いません。Mac上のログイン済みブラウザを[`twitter_api_safe_relay`](https://github.com/fa0311/twitter_api_safe_relay)が操作し、このプロジェクトのgatewayが必要な読み取り結果だけを固定DTOへ変換してEven G2へ渡します。
+X API keyは使いません。Mac上のログイン済みブラウザを[`twitter_api_safe_relay`](https://github.com/fa0311/twitter_api_safe_relay)が操作し、このプロジェクトのgatewayが必要な結果だけを固定DTOへ変換してEven G2へ渡します。
 
 > [!IMPORTANT]
-> `twitter_api_safe_relay`をインターネットへ直接公開しないでください。このアプリにも投稿、Like、Repost、Followなどのwrite endpointはありません。本番構成でもTunnelへ接続するのはBearer認証付きread-only gatewayだけです。
+> `twitter_api_safe_relay`をインターネットへ直接公開しないでください。Tunnelへ接続するのはBearer認証付きgatewayだけです。write操作はLike、Repost、Bookmarkの有効化・解除だけに制限し、投稿、返信、Follow、削除などは公開しません。
 
 ## 構成
 
 ```text
 Even G2 / iPhone WebView
-        │ GET /api/v1/*
+        │ authenticated GET / PUT / DELETE
         ▼
-read-only gateway :8787
-        │ allowlist済み4操作だけ
+Doge gateway :8787
+        │ allowlist済み10操作だけ
         ▼
 twitter_api_safe_relay :6900 (localhost only)
         │
@@ -23,19 +23,21 @@ twitter_api_safe_relay :6900 (localhost only)
 ```
 
 - `apps/g2` — Even Hub SDK、576×288 glasses UI、投稿者icon・投稿画像、iPhone companion UI
-- `apps/gateway` — Hono/Node.jsのread-only gateway、Xレスポンス正規化、avatar・投稿画像proxy
+- `apps/gateway` — Hono/Node.js gateway、固定reaction routes、Xレスポンス正規化、avatar・投稿画像proxy
 - `packages/contracts` — frontendとgatewayで共有するZod schema
 - `scripts` — relay catalog同期とproduction origin生成
 
 ## 操作
 
-| 入力           | 動作                               |
-| -------------- | ---------------------------------- |
-| 上スワイプ     | 本文の続き / 読了後に次の投稿      |
-| 下スワイプ     | 本文の前ページ / 前の投稿          |
-| 右glassesをtap | threadを開く / 戻る / error時retry |
-| R1をtap        | Home → Following → Bookmarks       |
-| double tap     | 終了確認                           |
+| 入力           | 動作                              |
+| -------------- | --------------------------------- |
+| 上スワイプ     | 本文の続き / 読了後に次の投稿     |
+| 下スワイプ     | 本文の前ページ / 前の投稿         |
+| 右glassesをtap | 右側のaction menuを開く           |
+| menu内でscroll | Like / Repost / Bookmark / thread |
+| menu内でtap    | 選択を実行し、成功後menuを閉じる  |
+| R1をtap        | Home → Following → Bookmarks      |
+| double tap     | 終了確認                          |
 
 長い本文はG2の実フォント幅に合わせてページ分割し、文字を省略しません。画像付きポストでは本文を最後まで進めたページの直下に、縦横比を維持した画像を表示します。写真は最初の1枚、動画・animated GIFは静止posterを再生マーク付きで表示します。動画データの取得・再生は行いません。
 
@@ -107,7 +109,7 @@ Safe Relayへログイン済みで、`npm run build`と`npm run relay:sync`が�
 npm run preview:live
 ```
 
-このcommandは256-bitの一時tokenを生成し、Bearer認証を必須にしたread-only gatewayと使い捨てCloudflare Quick Tunnelを起動します。tokenはterminalへ出力せず、権限`600`の一時QR画像にだけ埋め込みます。URL fragmentはCloudflareへ送られず、Even WebViewがsession内でtokenを取り込み、API requestのAuthorization headerへ変換します。`Ctrl-C`でgatewayとTunnelを終了し、QR画像を削除してtokenを失効させます。
+このcommandは256-bitの一時tokenを生成し、Bearer認証を必須にしたscoped gatewayと使い捨てCloudflare Quick Tunnelを起動します。tokenはterminalへ出力せず、権限`600`の一時QR画像にだけ埋め込みます。URL fragmentはCloudflareへ送られず、Even WebViewがsession内でtokenを取り込み、API requestのAuthorization headerへ変換します。`Ctrl-C`でgatewayとTunnelを終了し、QR画像を削除してtokenを失効させます。
 
 Quick Tunnelは実機開発専用で、可用性保証や固定URLはありません。本番運用では`doge.h1ka.ru`のnamed Tunnelを使います。
 
@@ -142,7 +144,7 @@ Safe Relayが起動中であることを確認して本番gatewayとnamed Tunnel
 npm run production:start
 ```
 
-外出中もMacの電源・ネット接続、Safe Relay、`production:start`を維持してください。現在の構成ではiPhoneとG2だけでXへ直接接続するわけではなく、自宅Macがread-only backendです。
+外出中もMacの電源・ネット接続、Safe Relay、`production:start`を維持してください。現在の構成ではiPhoneとG2だけでXへ直接接続するわけではなく、自宅Macがbackendです。
 
 ## Private buildとBeta build
 
@@ -158,10 +160,10 @@ npm run production:start
 
 ## Security defaults
 
-- public client routeはtimeline、thread、avatar・投稿画像のread-only `GET`のみ
+- public client routeはtimeline、thread、avatar・投稿画像の`GET`と、Like、Repost、Bookmark専用の`PUT`/`DELETE`のみ
 - feed、cursor、post IDをschema検証
 - relay base URLはloopback HTTPのみ許可
-- relay operationはHomeTimeline、HomeLatestTimeline、Bookmarks、TweetDetailだけ
+- relay operationは4つのread操作とFavorite/Unfavorite、Create/Delete Retweet、Create/Delete Bookmarkの6つだけ
 - XのGraphQL errorをHTTP 200でも失敗として扱う
 - upstream timeout 15秒、response上限5 MB
 - avatar proxyは`pbs.twimg.com/profile_images`のHTTPS画像だけを許可し、redirect禁止、5秒timeout、512 KB上限、画像content-type必須

@@ -35,6 +35,9 @@ const raw = {
                             reply_count: 3,
                             retweet_count: 5,
                             favorite_count: 8,
+                            favorited: true,
+                            retweeted: true,
+                            bookmarked: true,
                             extended_entities: {
                               media: [
                                 {
@@ -107,6 +110,9 @@ describe('parseTimeline', () => {
           repostCount: 5,
           likeCount: 8,
           viewCount: 13,
+          viewerHasLiked: true,
+          viewerHasReposted: true,
+          viewerHasBookmarked: true,
           images: [
             {
               kind: 'photo',

@@ -15,6 +15,9 @@ describe('renderGlassesText', () => {
       repostCount: 2,
       likeCount: 3,
       viewCount: 4,
+      viewerHasLiked: false,
+      viewerHasReposted: false,
+      viewerHasBookmarked: false,
       images: [
         {
           kind: 'video_thumbnail' as const,

@@ -1,5 +1,5 @@
 export type InputAction =
-  'next' | 'previous' | 'cycle-feed' | 'toggle-detail' | 'exit' | 'cleanup' | null
+  'next' | 'previous' | 'cycle-feed' | 'toggle-detail' | 'open-menu' | 'exit' | 'cleanup' | null
 
 interface EventPart {
   eventType?: number
@@ -18,7 +18,7 @@ export function classifyInput(event: InputEventLike): InputAction {
   if (type === 6 || type === 7) return 'cleanup'
   if (type === 0 || type === undefined) {
     if (!event.sysEvent) return null
-    return event.sysEvent.eventSource === 2 ? 'cycle-feed' : 'toggle-detail'
+    return event.sysEvent.eventSource === 2 ? 'cycle-feed' : 'open-menu'
   }
   return null
 }

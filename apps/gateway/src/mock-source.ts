@@ -1,11 +1,18 @@
-import type { Feed, Post, Thread, TimelinePage } from '@even-g2-x-reader/contracts'
+import type {
+  Feed,
+  Post,
+  Reaction,
+  ReactionResult,
+  Thread,
+  TimelinePage,
+} from '@even-g2-x-reader/contracts'
 import type { TimelineSource } from './source.js'
 
 const feedText: Record<Feed, string[]> = {
   home: [
     'Even G2 reader is running in mock mode. Swipe up for the next post.',
-    'The X Safe Relay stays on localhost. Only this read-only gateway may be exposed later.',
-    'Tap the right glasses touchpad to open a thread. Double-tap to exit.',
+    'The X Safe Relay stays on localhost. Doge exposes only scoped gateway routes.',
+    'Tap the right glasses touchpad to open actions. Double-tap to exit.',
     'A ring tap cycles Home, Following, and Bookmarks.',
   ],
   following: [
@@ -14,7 +21,7 @@ const feedText: Record<Feed, string[]> = {
   ],
   bookmarks: [
     'Bookmarks feed: gateway responses are normalised before reaching the glasses.',
-    'No like, repost, follow, or post endpoint exists in this application.',
+    'Doge supports Like, Repost, and Bookmark, but not follow or posting.',
   ],
 }
 
@@ -32,14 +39,30 @@ function postsFor(feed: Feed): Post[] {
     likeCount: index * 3,
     viewCount: (index + 1) * 100,
     images: [],
+    viewerHasLiked: false,
+    viewerHasReposted: false,
+    viewerHasBookmarked: false,
   }))
 }
 
 export class MockTimelineSource implements TimelineSource {
+  readonly #reactions = new Map<string, Partial<Record<Reaction, boolean>>>()
+
+  #withViewerState(post: Post): Post {
+    const reactions = this.#reactions.get(post.id)
+    if (!reactions) return post
+    return {
+      ...post,
+      viewerHasLiked: reactions.like ?? post.viewerHasLiked,
+      viewerHasReposted: reactions.repost ?? post.viewerHasReposted,
+      viewerHasBookmarked: reactions.bookmark ?? post.viewerHasBookmarked,
+    }
+  }
+
   async list(feed: Feed, cursor?: string): Promise<TimelinePage> {
     const offset = cursor === 'page-2' ? 2 : 0
     const all = postsFor(feed)
-    const posts = all.slice(offset, offset + 2)
+    const posts = all.slice(offset, offset + 2).map((post) => this.#withViewerState(post))
     const nextCursor = offset + posts.length < all.length ? 'page-2' : null
     return { feed, posts, nextCursor }
   }
@@ -51,10 +74,10 @@ export class MockTimelineSource implements TimelineSource {
     return {
       rootId: postId,
       posts: [
-        root,
+        this.#withViewerState(root),
         {
           ...root,
-          id: `${postId}-reply`,
+          id: String(Number(postId) + 9_000_000_000_000),
           authorName: 'Thread Reply',
           authorHandle: 'reply',
           text: 'This is a mock reply. Tap again to return to the feed.',
@@ -62,5 +85,10 @@ export class MockTimelineSource implements TimelineSource {
         },
       ],
     }
+  }
+
+  async setReaction(postId: string, reaction: Reaction, active: boolean): Promise<ReactionResult> {
+    this.#reactions.set(postId, { ...this.#reactions.get(postId), [reaction]: active })
+    return { postId, reaction, active }
   }
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { timelinePageSchema } from './index.js'
+import { reactionResultSchema, timelinePageSchema } from './index.js'
 
 describe('timelinePageSchema', () => {
   it('accepts the stable public DTO', () => {
@@ -24,6 +24,20 @@ describe('timelinePageSchema', () => {
 
     expect(result.posts[0]?.authorHandle).toBe('ada')
     expect(result.posts[0]?.images).toEqual([])
+    expect(result.posts[0]).toMatchObject({
+      viewerHasLiked: false,
+      viewerHasReposted: false,
+      viewerHasBookmarked: false,
+    })
+  })
+
+  it('validates the bounded reaction response DTO', () => {
+    expect(
+      reactionResultSchema.parse({ postId: '42', reaction: 'bookmark', active: true }),
+    ).toEqual({ postId: '42', reaction: 'bookmark', active: true })
+    expect(() =>
+      reactionResultSchema.parse({ postId: '42', reaction: 'follow', active: true }),
+    ).toThrow()
   })
 
   it('accepts bounded post image metadata', () => {

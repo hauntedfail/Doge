@@ -4,7 +4,18 @@ const source =
   'https://raw.githubusercontent.com/fa0311/twitter_api_safe_relay_skills/main/skills/twitter-api-relay/requests.ndjson'
 const destination = new URL('../var/requests.ndjson', import.meta.url)
 const temporary = new URL('../var/requests.ndjson.tmp', import.meta.url)
-const required = ['HomeTimeline', 'HomeLatestTimeline', 'Bookmarks', 'TweetDetail']
+const required = [
+  'HomeTimeline',
+  'HomeLatestTimeline',
+  'Bookmarks',
+  'TweetDetail',
+  'FavoriteTweet',
+  'UnfavoriteTweet',
+  'CreateRetweet',
+  'DeleteRetweet',
+  'CreateBookmark',
+  'DeleteBookmark',
+]
 
 const response = await fetch(source, { signal: AbortSignal.timeout(15_000) })
 if (!response.ok) throw new Error(`Catalog download failed with HTTP ${response.status}`)

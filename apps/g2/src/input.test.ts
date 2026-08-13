@@ -7,9 +7,9 @@ describe('classifyInput', () => {
     expect(classifyInput({ textEvent: { eventType: 2 } })).toBe('previous')
   })
 
-  it('uses ring click for feed switching and glasses click for detail', () => {
+  it('uses ring click for feed switching and glasses click for the action menu', () => {
     expect(classifyInput({ sysEvent: { eventType: 0, eventSource: 2 } })).toBe('cycle-feed')
-    expect(classifyInput({ sysEvent: { eventType: 0, eventSource: 1 } })).toBe('toggle-detail')
+    expect(classifyInput({ sysEvent: { eventType: 0, eventSource: 1 } })).toBe('open-menu')
   })
 
   it('maps any double click to exit', () => {

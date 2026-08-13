@@ -1,6 +1,6 @@
 import { timingSafeEqual } from 'node:crypto'
-import { feedSchema } from '@even-g2-x-reader/contracts'
-import { Hono } from 'hono'
+import { feedSchema, reactionResultSchema, reactionSchema } from '@even-g2-x-reader/contracts'
+import { Hono, type Context } from 'hono'
 import { secureHeaders } from 'hono/secure-headers'
 import { z } from 'zod'
 import { loadAvatar, parseAvatarUrl } from './avatar.js'
@@ -40,7 +40,7 @@ export function createApp(options: AppOptions): Hono {
     if (origin && (options.allowedOrigins.includes(origin) || options.allowBearerCors)) {
       context.header('access-control-allow-origin', origin)
       context.header('vary', 'Origin')
-      context.header('access-control-allow-methods', 'GET, OPTIONS')
+      context.header('access-control-allow-methods', 'GET, PUT, DELETE, OPTIONS')
       context.header('access-control-allow-headers', 'Authorization, Content-Type')
     }
     if (context.req.method === 'OPTIONS') return context.body(null, 204)
@@ -74,6 +74,24 @@ export function createApp(options: AppOptions): Hono {
     }
     return context.json(await options.source.thread(id.data))
   })
+  const setReaction = async (context: Context) => {
+    const id = postId.safeParse(context.req.param('id'))
+    const reaction = reactionSchema.safeParse(context.req.param('reaction'))
+    if (!id.success || !reaction.success) {
+      return context.json(
+        { error: { code: 'invalid_request', message: 'Invalid post ID or reaction' } },
+        400,
+      )
+    }
+    const result = await options.source.setReaction(
+      id.data,
+      reaction.data,
+      context.req.method === 'PUT',
+    )
+    return context.json(reactionResultSchema.parse(result))
+  }
+  app.put('/api/v1/posts/:id/reactions/:reaction', setReaction)
+  app.delete('/api/v1/posts/:id/reactions/:reaction', setReaction)
   app.get('/api/v1/avatar', async (context) => {
     const url = parseAvatarUrl(context.req.query('url'))
     if (!url) {

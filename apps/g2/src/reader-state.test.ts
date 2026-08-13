@@ -13,6 +13,9 @@ const posts = ['1', '2'].map((id) => ({
   likeCount: 0,
   viewCount: null,
   images: [],
+  viewerHasLiked: false,
+  viewerHasReposted: false,
+  viewerHasBookmarked: false,
 }))
 
 describe('reader state', () => {
@@ -49,5 +52,46 @@ describe('reader state', () => {
     expect(restored.feed).toBe('bookmarks')
     expect(restored.posts).toHaveLength(2)
     expect(restoreReaderSnapshot(restored, { feed: 'likes' }).feed).toBe('bookmarks')
+  })
+
+  it('updates reaction state and visible counts exactly once across thread copies', () => {
+    let state = reduceReaderState(initialReaderState(), {
+      type: 'timeline-loaded',
+      posts,
+      nextCursor: null,
+    })
+    state = reduceReaderState(state, { type: 'thread-loaded', posts: [posts[0]!] })
+    state = reduceReaderState(state, {
+      type: 'reaction-updated',
+      postId: '1',
+      reaction: 'like',
+      active: true,
+    })
+    expect(state.posts[0]).toMatchObject({ viewerHasLiked: true, likeCount: 1 })
+    expect(state.returnTo?.posts[0]).toMatchObject({ viewerHasLiked: true, likeCount: 1 })
+
+    state = reduceReaderState(state, {
+      type: 'reaction-updated',
+      postId: '1',
+      reaction: 'like',
+      active: true,
+    })
+    expect(state.posts[0]?.likeCount).toBe(1)
+
+    state = reduceReaderState(state, {
+      type: 'reaction-updated',
+      postId: '1',
+      reaction: 'repost',
+      active: true,
+    })
+    expect(state.posts[0]).toMatchObject({ viewerHasReposted: true, repostCount: 1 })
+
+    state = reduceReaderState(state, {
+      type: 'reaction-updated',
+      postId: '1',
+      reaction: 'bookmark',
+      active: true,
+    })
+    expect(state.posts[0]).toMatchObject({ viewerHasBookmarked: true })
   })
 })

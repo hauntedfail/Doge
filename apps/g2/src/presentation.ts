@@ -53,8 +53,8 @@ function postSections(post: Post, state: ReaderState, requestedPage: number): Gl
     `${clean(post.authorName)}\n@${clean(post.authorHandle)}  ${date(post.createdAt)}`.trim()
   const help =
     state.mode === 'thread'
-      ? 'UP next  DOWN back  TAP return  DOUBLE exit'
-      : 'UP next  DOWN back  TAP thread  R1 feed  DOUBLE exit'
+      ? 'UP next  DOWN back  TAP actions  DOUBLE exit'
+      : 'UP next  DOWN back  TAP actions  R1 feed  DOUBLE exit'
   return {
     header,
     author,

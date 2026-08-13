@@ -5,6 +5,8 @@ import {
   ImageContainerProperty,
   ImageRawDataUpdate,
   ImageRawDataUpdateResult,
+  ListContainerProperty,
+  ListItemContainerProperty,
   RebuildPageContainer,
   StartUpPageCreateResult,
   TextContainerProperty,
@@ -12,7 +14,7 @@ import {
   waitForEvenAppBridge,
   type EvenHubEvent,
 } from '@evenrealities/even_hub_sdk'
-import { loadAvatarImage, loadPostImage, loadThread, loadTimeline } from './api.js'
+import { loadAvatarImage, loadPostImage, loadThread, loadTimeline, setReaction } from './api.js'
 import { browserAccessToken, clearBrowserAccessToken, saveBrowserAccessToken } from './auth.js'
 import { registerBackgroundState } from './background-state.js'
 import { classifyInput, type InputAction } from './input.js'
@@ -29,6 +31,7 @@ import {
   renderPostImagePlaceholder,
 } from './post-image.js'
 import { renderGlassesSections } from './presentation.js'
+import { reactionMenuItems, reactionSelection } from './reaction-menu.js'
 import {
   initialReaderState,
   readerSnapshot,
@@ -47,6 +50,8 @@ const LIKE_COUNT_ID = 7
 const HELP_ID = 8
 const METRIC_STRIP_ID = 9
 const POST_IMAGE_ID = 10
+const ACTION_MENU_BACKGROUND_ID = 11
+const ACTION_MENU_ID = 12
 const HEADER_NAME = 'doge_header'
 const AUTHOR_NAME = 'doge_author'
 const BODY_NAME = 'doge_body'
@@ -57,6 +62,8 @@ const LIKE_COUNT_NAME = 'doge_like_num'
 const HELP_NAME = 'doge_help'
 const METRIC_STRIP_NAME = 'doge_metrics'
 const POST_IMAGE_NAME = 'doge_post_img'
+const ACTION_MENU_NAME = 'doge_actions'
+const ACTION_MENU_BACKGROUND_NAME = 'doge_action_bg'
 const AVATAR_SIZE = 48
 const PLAIN_METRIC_Y = 220
 const MEDIA_METRIC_Y = 258
@@ -65,7 +72,7 @@ const POST_IMAGE_X = 144
 const POST_IMAGE_Y = 156
 
 interface MetricLayout {
-  kind: MetricIconKind
+  kind: Exclude<MetricIconKind, 'bookmark'>
   countID: number
   countName: string
   countX: number
@@ -78,27 +85,29 @@ const METRIC_LAYOUT: readonly MetricLayout[] = [
     countID: REPLY_COUNT_ID,
     countName: REPLY_COUNT_NAME,
     countX: 174,
-    countWidth: 62,
+    countWidth: 48,
   },
   {
     kind: 'repost',
     countID: REPOST_COUNT_ID,
     countName: REPOST_COUNT_NAME,
-    countX: 270,
-    countWidth: 62,
+    countX: 262,
+    countWidth: 48,
   },
   {
     kind: 'like',
     countID: LIKE_COUNT_ID,
     countName: LIKE_COUNT_NAME,
-    countX: 366,
-    countWidth: 62,
+    countX: 350,
+    countWidth: 48,
   },
 ]
 let state: ReaderState = initialReaderState()
 let bodyPage = 0
 let updateGlasses: (() => Promise<void>) | undefined
 let stateRevision = 0
+let menuOpen = false
+let menuError: string | null = null
 
 function element(id: string): HTMLElement | null {
   return document.getElementById(id)
@@ -163,9 +172,22 @@ async function loadCurrentFeed(): Promise<void> {
 async function handleAction(action: InputAction): Promise<void> {
   if (!action || action === 'cleanup' || action === 'exit') return
   if (action === 'cycle-feed') {
+    menuOpen = false
+    menuError = null
     bodyPage = 0
     state = reduceReaderState(state, { type: 'cycle-feed' })
     await loadCurrentFeed()
+    return
+  }
+  if (action === 'open-menu') {
+    if (state.status === 'error') {
+      await loadCurrentFeed()
+      return
+    }
+    if (state.status !== 'ready' || !state.posts[state.index]) return
+    menuOpen = true
+    menuError = null
+    await render()
     return
   }
   if (action === 'toggle-detail') {
@@ -235,6 +257,36 @@ async function handleAction(action: InputAction): Promise<void> {
   await render()
 }
 
+async function handleMenuSelection(index: number): Promise<void> {
+  const post = state.posts[state.index]
+  if (!post) return
+  const adjustedIndex = menuError ? index - 1 : index
+  if (adjustedIndex < 0) return
+  const selection = reactionSelection(post, adjustedIndex)
+  if (!selection) return
+  if (selection === 'close') {
+    menuOpen = false
+    menuError = null
+    await render()
+    return
+  }
+  if (selection === 'thread') {
+    menuOpen = false
+    menuError = null
+    await handleAction('toggle-detail')
+    return
+  }
+  try {
+    const result = await setReaction(post.id, selection.reaction, selection.active)
+    state = reduceReaderState(state, { type: 'reaction-updated', ...result })
+    menuOpen = false
+    menuError = null
+  } catch (error) {
+    menuError = error instanceof Error ? `Update failed: ${error.message}` : 'Update failed'
+  }
+  await render()
+}
+
 registerBackgroundState(
   'readerState',
   () => readerSnapshot(state),
@@ -242,6 +294,8 @@ registerBackgroundState(
     stateRevision += 1
     state = restoreReaderSnapshot(state, saved)
     bodyPage = 0
+    menuOpen = false
+    menuError = null
     void render()
   },
 )
@@ -263,6 +317,8 @@ element('pairing')?.addEventListener('submit', (event) => {
   stateRevision += 1
   state = initialReaderState()
   bodyPage = 0
+  menuOpen = false
+  menuError = null
   void loadCurrentFeed()
 })
 element('forget-device')?.addEventListener('click', () => {
@@ -270,6 +326,8 @@ element('forget-device')?.addEventListener('click', () => {
   stateRevision += 1
   state = { ...initialReaderState(), status: 'error', error: 'Access key required on this iPhone' }
   bodyPage = 0
+  menuOpen = false
+  menuError = null
   void render()
 })
 updatePhone()
@@ -282,6 +340,8 @@ async function startGlasses(): Promise<void> {
   let renderedAvatarUrl: string | null | undefined
   let renderedPostImageKey: string | null | undefined
   let renderedHasPostImage = false
+  let renderedMenuSignature = ''
+  let renderedMetricSignature = ''
   let bridgeQueue = Promise.resolve()
 
   const textContainer = (
@@ -344,13 +404,56 @@ async function startGlasses(): Promise<void> {
       zOrderIndex: 5,
     })
 
+  const actionMenu = (items: string[]) =>
+    new ListContainerProperty({
+      xPosition: 316,
+      yPosition: 72,
+      width: 252,
+      height: 144,
+      borderWidth: 2,
+      borderColor: 15,
+      borderRadius: 6,
+      paddingLength: 4,
+      containerID: ACTION_MENU_ID,
+      containerName: ACTION_MENU_NAME,
+      isEventCapture: 1,
+      zOrderIndex: 12,
+      itemContainer: new ListItemContainerProperty({
+        itemCount: items.length,
+        itemWidth: 0,
+        isItemSelectBorderEn: 1,
+        itemName: items,
+      }),
+    })
+
+  const actionMenuBackground = () =>
+    new ImageContainerProperty({
+      xPosition: 316,
+      yPosition: 72,
+      width: 252,
+      height: 144,
+      containerID: ACTION_MENU_BACKGROUND_ID,
+      containerName: ACTION_MENU_BACKGROUND_NAME,
+      zOrderIndex: 11,
+    })
+
   const page = (sections: ReturnType<typeof renderGlassesSections>) => {
     const hasPostImage = sections.postImageUrl !== null
     const metricY = hasPostImage ? MEDIA_METRIC_Y : PLAIN_METRIC_Y
     const textObject = [
       textContainer(HEADER_ID, HEADER_NAME, 8, 4, 560, 28, 1, sections.header),
       textContainer(AUTHOR_ID, AUTHOR_NAME, 72, 36, 492, 58, 2, sections.author),
-      textContainer(BODY_ID, BODY_NAME, 8, 100, 560, hasPostImage ? 52 : 112, 3, sections.body, 1),
+      textContainer(
+        BODY_ID,
+        BODY_NAME,
+        8,
+        100,
+        560,
+        hasPostImage ? 52 : 112,
+        3,
+        sections.body,
+        menuOpen ? 0 : 1,
+      ),
       ...METRIC_LAYOUT.map((metric, index) =>
         textContainer(
           metric.countID,
@@ -367,13 +470,26 @@ async function startGlasses(): Promise<void> {
     if (!hasPostImage) {
       textObject.push(textContainer(HELP_ID, HELP_NAME, 8, 252, 560, 36, 10, sections.help))
     }
+    const post = state.posts[state.index]
+    const menuItems =
+      menuOpen && post
+        ? [
+            ...(menuError ? [menuError.slice(0, 64)] : []),
+            ...reactionMenuItems(post).map((item) =>
+              item === 'Open thread' && state.mode === 'thread' ? 'Close thread' : item,
+            ),
+          ]
+        : []
     return {
       textObject,
       imageObject: [
         avatarContainer(),
         ...(hasPostImage ? [postImageContainer()] : []),
         metricStripContainer(metricY),
+        ...(menuItems.length > 0 ? [actionMenuBackground()] : []),
       ],
+      listObject: menuItems.length > 0 ? [actionMenu(menuItems)] : [],
+      menuSignature: menuItems.join('\u0000'),
       hasPostImage,
     }
   }
@@ -398,6 +514,35 @@ async function startGlasses(): Promise<void> {
       context.stroke()
     }
     return canvas.toDataURL('image/png').split(',', 2)[1] ?? ''
+  }
+
+  const menuBackgroundData = (): string => {
+    const canvas = document.createElement('canvas')
+    canvas.width = 252
+    canvas.height = 144
+    const context = canvas.getContext('2d')
+    if (context) {
+      context.fillStyle = '#000'
+      context.fillRect(0, 0, canvas.width, canvas.height)
+      context.strokeStyle = '#fff'
+      context.lineWidth = 2
+      context.strokeRect(1, 1, canvas.width - 2, canvas.height - 2)
+    }
+    return canvas.toDataURL('image/png').split(',', 2)[1] ?? ''
+  }
+
+  const updateMenuBackground = async (): Promise<void> => {
+    if (!menuOpen) return
+    const result = await bridge.updateImageRawData(
+      new ImageRawDataUpdate({
+        containerID: ACTION_MENU_BACKGROUND_ID,
+        containerName: ACTION_MENU_BACKGROUND_NAME,
+        imageData: menuBackgroundData(),
+      }),
+    )
+    if (result !== ImageRawDataUpdateResult.success) {
+      console.warn(`Action menu background update failed: ${result}`)
+    }
   }
 
   const avatarData = async (url: string | null): Promise<ArrayBuffer | string> => {
@@ -433,17 +578,27 @@ async function startGlasses(): Promise<void> {
     renderedAvatarUrl = url
   }
 
-  const updateMetricStrip = async (): Promise<void> => {
+  const updateMetricStrip = async (force = false): Promise<void> => {
+    const post = state.posts[state.index]
+    const metricState = {
+      viewerHasLiked: post?.viewerHasLiked ?? false,
+      viewerHasReposted: post?.viewerHasReposted ?? false,
+      viewerHasBookmarked: post?.viewerHasBookmarked ?? false,
+    }
+    const signature = JSON.stringify(metricState)
+    if (!force && signature === renderedMetricSignature) return
     const result = await bridge.updateImageRawData(
       new ImageRawDataUpdate({
         containerID: METRIC_STRIP_ID,
         containerName: METRIC_STRIP_NAME,
-        imageData: renderMetricIconStrip(),
+        imageData: renderMetricIconStrip(metricState),
       }),
     )
     if (result !== ImageRawDataUpdateResult.success) {
       console.warn(`Metric icon update failed: ${result}`)
+      return
     }
+    renderedMetricSignature = signature
   }
 
   const postImageData = async (url: string, kind: PostImageKind): Promise<string> => {
@@ -496,17 +651,22 @@ async function startGlasses(): Promise<void> {
     force: boolean,
   ): Promise<void> => {
     await updateAvatar(sections.avatarUrl, force)
-    await updateMetricStrip()
+    await updateMetricStrip(force)
     if (sections.postImageUrl && sections.postImageKind) {
       await updatePostImage(sections.postImageUrl, sections.postImageKind, force)
     } else renderedPostImageKey = null
+    await updateMenuBackground()
   }
 
   const initial = renderGlassesSections(state, bodyPage)
   const initialPage = page(initial)
   const result = await bridge.createStartUpPageContainer(
     new CreateStartUpPageContainer({
-      containerTotalNum: initialPage.textObject.length + initialPage.imageObject.length,
+      containerTotalNum:
+        initialPage.textObject.length +
+        initialPage.imageObject.length +
+        initialPage.listObject.length,
+      listObject: initialPage.listObject,
       textObject: initialPage.textObject,
       imageObject: initialPage.imageObject,
     }),
@@ -515,12 +675,15 @@ async function startGlasses(): Promise<void> {
     throw new Error(`Unable to create G2 page: ${result}`)
   rememberTextLengths(initialPage.textObject)
   renderedHasPostImage = initialPage.hasPostImage
+  renderedMenuSignature = initialPage.menuSignature
   await refreshPageImages(initial, true)
 
   const draw = async (): Promise<void> => {
     const sections = renderGlassesSections(state, bodyPage)
     const nextPage = page(sections)
-    let needsRebuild = nextPage.hasPostImage !== renderedHasPostImage
+    let needsRebuild =
+      nextPage.hasPostImage !== renderedHasPostImage ||
+      nextPage.menuSignature !== renderedMenuSignature
     if (!needsRebuild) {
       for (const text of nextPage.textObject) {
         const containerID = text.containerID ?? 0
@@ -545,17 +708,21 @@ async function startGlasses(): Promise<void> {
     if (needsRebuild) {
       await bridge.rebuildPageContainer(
         new RebuildPageContainer({
-          containerTotalNum: nextPage.textObject.length + nextPage.imageObject.length,
+          containerTotalNum:
+            nextPage.textObject.length + nextPage.imageObject.length + nextPage.listObject.length,
+          listObject: nextPage.listObject,
           textObject: nextPage.textObject,
           imageObject: nextPage.imageObject,
         }),
       )
       rememberTextLengths(nextPage.textObject)
       renderedHasPostImage = nextPage.hasPostImage
+      renderedMenuSignature = nextPage.menuSignature
       await refreshPageImages(sections, true)
       return
     }
     await updateAvatar(sections.avatarUrl)
+    await updateMetricStrip()
     if (sections.postImageUrl && sections.postImageKind) {
       await updatePostImage(sections.postImageUrl, sections.postImageKind)
     }
@@ -570,6 +737,11 @@ async function startGlasses(): Promise<void> {
   const unsubscribe = bridge.onEvenHubEvent((event: EvenHubEvent) => {
     queue = queue
       .then(async () => {
+        if (menuOpen && event.listEvent && (event.listEvent.eventType ?? 0) === 0) {
+          // Protobuf omits zero-valued scalars, so the first item arrives without an index.
+          await handleMenuSelection(event.listEvent.currentSelectItemIndex ?? 0)
+          return
+        }
         const action = classifyInput(event)
         if (action === 'exit') {
           await bridge.shutDownPageContainer(1)

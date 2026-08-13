@@ -14,6 +14,9 @@ const post = {
   likeCount: 1,
   viewCount: 2,
   images: [],
+  viewerHasLiked: false,
+  viewerHasReposted: false,
+  viewerHasBookmarked: false,
 }
 
 afterEach(() => vi.unstubAllGlobals())
@@ -22,6 +25,7 @@ function source(): TimelineSource {
   return {
     list: vi.fn(async (feed) => ({ feed, posts: [post], nextCursor: null })),
     thread: vi.fn(async (id) => ({ rootId: id, posts: [post] })),
+    setReaction: vi.fn(async (id, reaction, active) => ({ postId: id, reaction, active })),
   }
 }
 
@@ -35,6 +39,64 @@ describe('gateway', () => {
     expect((await app.request('/api/v1/media')).status).toBe(400)
     expect((await app.request('/i/api/graphql/anything', { method: 'POST' })).status).toBe(404)
     expect((await app.request('/api/v1/timeline?feed=home', { method: 'POST' })).status).toBe(404)
+  })
+
+  it('exposes only the three explicit reaction resources and validates IDs', async () => {
+    const timelineSource = source()
+    const app = createApp({ source: timelineSource, bearerToken: 'secret', allowedOrigins: [] })
+    const headers = { authorization: 'Bearer secret' }
+
+    expect(
+      (
+        await app.request('/api/v1/posts/42/reactions/like', {
+          method: 'PUT',
+          headers,
+        })
+      ).status,
+    ).toBe(200)
+    expect(
+      (
+        await app.request('/api/v1/posts/42/reactions/repost', {
+          method: 'DELETE',
+          headers,
+        })
+      ).status,
+    ).toBe(200)
+    expect(
+      (
+        await app.request('/api/v1/posts/42/reactions/bookmark', {
+          method: 'PUT',
+          headers,
+        })
+      ).status,
+    ).toBe(200)
+    expect(
+      (
+        await app.request('/api/v1/posts/42/reactions/follow', {
+          method: 'PUT',
+          headers,
+        })
+      ).status,
+    ).toBe(400)
+    expect(
+      (
+        await app.request('/api/v1/posts/not-a-post/reactions/like', {
+          method: 'PUT',
+          headers,
+        })
+      ).status,
+    ).toBe(400)
+  })
+
+  it('requires the configured bearer token for reaction writes', async () => {
+    const app = createApp({ source: source(), bearerToken: 'secret', allowedOrigins: [] })
+    expect(
+      (
+        await app.request('/api/v1/posts/42/reactions/like', {
+          method: 'PUT',
+        })
+      ).status,
+    ).toBe(401)
   })
 
   it('enforces bearer auth when configured', async () => {
@@ -111,6 +173,8 @@ describe('gateway', () => {
     expect(preflight.status).toBe(204)
     expect(preflight.headers.get('access-control-allow-origin')).toBe('capacitor://localhost')
     expect(preflight.headers.get('access-control-allow-headers')).toContain('Authorization')
+    expect(preflight.headers.get('access-control-allow-methods')).toContain('PUT')
+    expect(preflight.headers.get('access-control-allow-methods')).toContain('DELETE')
   })
 
   it('refuses bearer CORS without a gateway access key', () => {

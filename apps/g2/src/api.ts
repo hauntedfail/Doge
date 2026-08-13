@@ -1,7 +1,10 @@
 import {
+  reactionResultSchema,
   threadSchema,
   timelinePageSchema,
   type Feed,
+  type Reaction,
+  type ReactionResult,
   type Thread,
   type TimelinePage,
 } from '@even-g2-x-reader/contracts'
@@ -67,4 +70,26 @@ export async function loadThread(postId: string): Promise<Thread> {
     throw new Error('Invalid post ID')
   }
   return threadSchema.parse(await get(`/api/v1/posts/${encodeURIComponent(postId)}/thread`))
+}
+
+export async function setReaction(
+  postId: string,
+  reaction: Reaction,
+  active: boolean,
+): Promise<ReactionResult> {
+  if (!/^\d{1,24}$/u.test(postId)) throw new Error('Invalid post ID')
+  const headers = authorisedHeaders('application/json')
+  headers.set('content-type', 'application/json')
+  const response = await fetch(
+    `${apiBase()}/api/v1/posts/${encodeURIComponent(postId)}/reactions/${reaction}`,
+    {
+      method: active ? 'PUT' : 'DELETE',
+      credentials: 'omit',
+      headers,
+    },
+  )
+  const json = (await response.json()) as unknown
+  if (response.status === 401) throw new Error('Access key required on this iPhone')
+  if (!response.ok) throw new Error(`Gateway returned HTTP ${response.status}`)
+  return reactionResultSchema.parse(json)
 }

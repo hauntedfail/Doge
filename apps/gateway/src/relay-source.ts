@@ -1,13 +1,24 @@
-import type { Feed, Thread, TimelinePage } from '@even-g2-x-reader/contracts'
+import type {
+  Feed,
+  Reaction,
+  ReactionResult,
+  Thread,
+  TimelinePage,
+} from '@even-g2-x-reader/contracts'
 import { loadRelayCatalog, type OperationName, type RelayOperation } from './relay-catalog.js'
 import type { TimelineSource } from './source.js'
-import { parseThread, parseTimeline } from './x-parser.js'
+import { assertNoGraphQlErrors, parseThread, parseTimeline } from './x-parser.js'
 
 const MAX_RESPONSE_BYTES = 5_000_000
 const operationByFeed: Record<Feed, OperationName> = {
   home: 'HomeTimeline',
   following: 'HomeLatestTimeline',
   bookmarks: 'Bookmarks',
+}
+const mutationByReaction: Record<Reaction, readonly [OperationName, OperationName]> = {
+  like: ['FavoriteTweet', 'UnfavoriteTweet'],
+  repost: ['CreateRetweet', 'DeleteRetweet'],
+  bookmark: ['CreateBookmark', 'DeleteBookmark'],
 }
 
 function relayBaseUrl(value: string): URL {
@@ -58,6 +69,29 @@ function updateVariables(
   return copy
 }
 
+function mutationVariables(reaction: Reaction, active: boolean, postId: string) {
+  if (reaction === 'repost') {
+    return active
+      ? { tweet_id: postId, dark_request: false }
+      : { source_tweet_id: postId, dark_request: false }
+  }
+  return { tweet_id: postId }
+}
+
+function updateMutationVariables(
+  operation: RelayOperation,
+  reaction: Reaction,
+  active: boolean,
+  postId: string,
+): RelayOperation {
+  const copy = cloneOperation(operation)
+  if (copy.method !== 'POST' || !copy.data) {
+    throw new Error(`mutation operation ${copy.path} must be POST with data`)
+  }
+  copy.data.variables = mutationVariables(reaction, active, postId)
+  return copy
+}
+
 async function readLimited(response: Response): Promise<unknown> {
   const contentLength = Number(response.headers.get('content-length') ?? '0')
   if (contentLength > MAX_RESPONSE_BYTES) throw new Error('relay response exceeds 5 MB')
@@ -99,11 +133,41 @@ export class RelayTimelineSource implements TimelineSource {
     return readLimited(await fetch(url, init))
   }
 
+  async #mutation(
+    name: OperationName,
+    postId: string,
+    reaction: Reaction,
+    active: boolean,
+  ): Promise<unknown> {
+    const catalog = await loadRelayCatalog(this.#catalogPath)
+    const fromCatalog = catalog.get(name)
+    if (!fromCatalog) throw new Error(`relay operation unavailable: ${name}`)
+    const operation = updateMutationVariables(fromCatalog, reaction, active, postId)
+    const url = new URL(`i/api${operation.path.replace(/^\//u, '/')}`, this.#baseUrl)
+    const raw = await readLimited(
+      await fetch(url, {
+        method: 'POST',
+        headers: new Headers({ 'content-type': 'application/json' }),
+        body: JSON.stringify(operation.data),
+        signal: AbortSignal.timeout(15_000),
+      }),
+    )
+    assertNoGraphQlErrors(raw)
+    return raw
+  }
+
   async list(feed: Feed, cursor?: string): Promise<TimelinePage> {
     return parseTimeline(await this.#request(operationByFeed[feed], cursor), feed)
   }
 
   async thread(postId: string): Promise<Thread> {
     return parseThread(await this.#request('TweetDetail', undefined, postId), postId)
+  }
+
+  async setReaction(postId: string, reaction: Reaction, active: boolean): Promise<ReactionResult> {
+    if (!/^\d{1,24}$/u.test(postId)) throw new Error('Invalid post ID')
+    const [activate, deactivate] = mutationByReaction[reaction]
+    await this.#mutation(active ? activate : deactivate, postId, reaction, active)
+    return { postId, reaction, active }
   }
 }

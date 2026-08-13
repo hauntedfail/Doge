@@ -5,6 +5,12 @@ export const operationNames = [
   'HomeLatestTimeline',
   'Bookmarks',
   'TweetDetail',
+  'FavoriteTweet',
+  'UnfavoriteTweet',
+  'CreateRetweet',
+  'DeleteRetweet',
+  'CreateBookmark',
+  'DeleteBookmark',
 ] as const
 export type OperationName = (typeof operationNames)[number]
 

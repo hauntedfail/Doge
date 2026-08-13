@@ -1,4 +1,10 @@
-import { feedSchema, postSchema, type Feed, type Post } from '@even-g2-x-reader/contracts'
+import {
+  feedSchema,
+  postSchema,
+  type Feed,
+  type Post,
+  type Reaction,
+} from '@even-g2-x-reader/contracts'
 import { z } from 'zod'
 
 export type ReaderMode = 'timeline' | 'thread'
@@ -30,6 +36,7 @@ export type ReaderAction =
   | { type: 'cycle-feed' }
   | { type: 'thread-loaded'; posts: Post[] }
   | { type: 'close-thread' }
+  | { type: 'reaction-updated'; postId: string; reaction: Reaction; active: boolean }
   | { type: 'error'; message: string }
 
 const returnContextSchema = z.object({
@@ -63,6 +70,33 @@ export function initialReaderState(): ReaderState {
 
 function clampIndex(index: number, posts: Post[]): number {
   return Math.min(index, Math.max(0, posts.length - 1))
+}
+
+function updatePostReaction(post: Post, postId: string, reaction: Reaction, active: boolean): Post {
+  if (post.id !== postId) return post
+  const stateKey =
+    reaction === 'like'
+      ? 'viewerHasLiked'
+      : reaction === 'repost'
+        ? 'viewerHasReposted'
+        : 'viewerHasBookmarked'
+  const wasActive = post[stateKey]
+  if (wasActive === active) return post
+  if (reaction === 'like') {
+    return {
+      ...post,
+      viewerHasLiked: active,
+      likeCount: Math.max(0, post.likeCount + (active ? 1 : -1)),
+    }
+  }
+  if (reaction === 'repost') {
+    return {
+      ...post,
+      viewerHasReposted: active,
+      repostCount: Math.max(0, post.repostCount + (active ? 1 : -1)),
+    }
+  }
+  return { ...post, viewerHasBookmarked: active }
 }
 
 export function reduceReaderState(state: ReaderState, action: ReaderAction): ReaderState {
@@ -121,6 +155,17 @@ export function reduceReaderState(state: ReaderState, action: ReaderAction): Rea
         error: null,
         returnTo: null,
       }
+    case 'reaction-updated': {
+      const update = (post: Post) =>
+        updatePostReaction(post, action.postId, action.reaction, action.active)
+      return {
+        ...state,
+        posts: state.posts.map(update),
+        returnTo: state.returnTo
+          ? { ...state.returnTo, posts: state.returnTo.posts.map(update) }
+          : null,
+      }
+    }
     case 'error':
       return { ...state, status: 'error', error: action.message }
   }

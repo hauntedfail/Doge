@@ -39,6 +39,10 @@ function countAt(object: JsonObject | undefined, key: string): number {
   return 0
 }
 
+function booleanAt(object: JsonObject | undefined, key: string): boolean {
+  return object?.[key] === true
+}
+
 function positiveIntegerAt(object: JsonObject | undefined, key: string): number | null {
   const value = object?.[key]
   return typeof value === 'number' && Number.isInteger(value) && value > 0 && value <= 32_768
@@ -112,10 +116,13 @@ function postFromObject(candidate: JsonObject): Post | undefined {
     likeCount: countAt(legacy, 'favorite_count'),
     viewCount: views?.count === undefined ? null : countAt(views, 'count'),
     images: imagesAt(legacy),
+    viewerHasLiked: booleanAt(legacy, 'favorited'),
+    viewerHasReposted: booleanAt(legacy, 'retweeted'),
+    viewerHasBookmarked: booleanAt(legacy, 'bookmarked'),
   }
 }
 
-function assertNoGraphQlErrors(raw: unknown): void {
+export function assertNoGraphQlErrors(raw: unknown): void {
   if (!isObject(raw) || !Array.isArray(raw.errors) || raw.errors.length === 0) return
   const messages = raw.errors.map((error) => {
     return isObject(error) && typeof error.message === 'string'
