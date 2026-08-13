@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { VIEW_OPTIONS, doubleTapDestination, feedForViewIndex } from './app-navigation.js'
+import { VIEW_OPTIONS, backDestination, feedForViewIndex } from './app-navigation.js'
 
 describe('Doge application navigation', () => {
   it('starts from the three explicit timeline views', () => {
@@ -14,10 +14,21 @@ describe('Doge application navigation', () => {
     expect(feedForViewIndex(3)).toBeNull()
   })
 
-  it('returns from a reader view before allowing exit at the selector', () => {
-    expect(doubleTapDestination('reader', true)).toBe('close-menu')
-    expect(doubleTapDestination('gallery')).toBe('reader')
-    expect(doubleTapDestination('reader')).toBe('view-select')
-    expect(doubleTapDestination('view-select')).toBe('exit')
+  it('applies the shared back hierarchy from transient UI to app exit', () => {
+    expect(backDestination({ layer: 'reader', menuOpen: true, readerMode: 'thread' })).toBe(
+      'close-menu',
+    )
+    expect(backDestination({ layer: 'gallery', menuOpen: false, readerMode: 'thread' })).toBe(
+      'reader',
+    )
+    expect(backDestination({ layer: 'reader', menuOpen: false, readerMode: 'thread' })).toBe(
+      'close-thread',
+    )
+    expect(backDestination({ layer: 'reader', menuOpen: false, readerMode: 'timeline' })).toBe(
+      'view-select',
+    )
+    expect(backDestination({ layer: 'view-select', menuOpen: false, readerMode: 'timeline' })).toBe(
+      'exit',
+    )
   })
 })

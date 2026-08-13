@@ -19,15 +19,10 @@ import { loadAvatarImage, loadPostImage, loadThread, loadTimeline, setReaction }
 import { ACTION_MENU_BACKGROUND_TILES, ACTION_MENU_BOUNDS } from './action-menu-layout.js'
 import { browserAccessToken, clearBrowserAccessToken, saveBrowserAccessToken } from './auth.js'
 import { registerBackgroundState } from './background-state.js'
-import {
-  VIEW_OPTIONS,
-  doubleTapDestination,
-  feedForViewIndex,
-  type AppLayer,
-} from './app-navigation.js'
+import { VIEW_OPTIONS, backDestination, feedForViewIndex, type AppLayer } from './app-navigation.js'
 import { canvasPngBytes } from './image-bytes.js'
 import { galleryTitle, slideGalleryIndex } from './gallery.js'
-import { classifyInput, type InputAction } from './input.js'
+import { classifyInput, type SwipeDirection } from './input.js'
 import { LatestRenderEpoch, renderLatestImage } from './latest-image.js'
 import {
   METRIC_ICON_SIZE,
@@ -149,6 +144,9 @@ let stateRevision = 0
 let menuOpen = false
 let menuError: string | null = null
 let galleryImageIndex = 0
+let threadReturnBodyPage = 0
+
+type ReaderCommand = SwipeDirection | 'confirm' | 'toggle-detail'
 
 function element(id: string): HTMLElement | null {
   return document.getElementById(id)
@@ -247,6 +245,7 @@ async function openView(feed: (typeof VIEW_OPTIONS)[number]['feed']): Promise<vo
   menuOpen = false
   menuError = null
   galleryImageIndex = 0
+  threadReturnBodyPage = 0
   bodyPage = 0
   state = reduceReaderState(state, { type: 'select-feed', feed })
   await loadCurrentFeed()
@@ -257,6 +256,7 @@ async function returnToViewSelection(): Promise<void> {
   menuOpen = false
   menuError = null
   galleryImageIndex = 0
+  threadReturnBodyPage = 0
   bodyPage = 0
   await render()
 }
@@ -273,6 +273,7 @@ async function reloadCurrentView(): Promise<void> {
   menuOpen = false
   menuError = null
   galleryImageIndex = 0
+  threadReturnBodyPage = 0
   bodyPage = 0
   if (state.mode !== 'timeline') {
     state = reduceReaderState(state, { type: 'select-feed', feed: state.feed })
@@ -280,8 +281,7 @@ async function reloadCurrentView(): Promise<void> {
   await loadCurrentFeed()
 }
 
-async function handleAction(action: InputAction): Promise<void> {
-  if (!action || action === 'cleanup' || action === 'double-tap') return
+async function handleAction(action: ReaderCommand): Promise<void> {
   if (appLayer === 'gallery') {
     if (action !== 'next' && action !== 'previous') return
     const imageCount = state.posts[state.index]?.images.length ?? 0
@@ -292,7 +292,7 @@ async function handleAction(action: InputAction): Promise<void> {
     return
   }
   if (appLayer !== 'reader') return
-  if (action === 'open-menu') {
+  if (action === 'confirm') {
     if (state.status === 'error') {
       await loadCurrentFeed()
       return
@@ -310,7 +310,9 @@ async function handleAction(action: InputAction): Promise<void> {
     }
     if (state.mode === 'thread') {
       state = reduceReaderState(state, { type: 'close-thread' })
-      bodyPage = 0
+      const restoredSections = renderGlassesSections(state, threadReturnBodyPage)
+      bodyPage = Math.min(threadReturnBodyPage, restoredSections.bodyPageCount - 1)
+      threadReturnBodyPage = 0
       await render()
       return
     }
@@ -321,6 +323,7 @@ async function handleAction(action: InputAction): Promise<void> {
     try {
       const thread = await loadThread(current.id)
       state = reduceReaderState(state, { type: 'thread-loaded', posts: thread.posts })
+      threadReturnBodyPage = bodyPage
       bodyPage = 0
     } catch (error) {
       state = reduceReaderState(state, {
@@ -331,7 +334,10 @@ async function handleAction(action: InputAction): Promise<void> {
     await render()
     return
   }
-  if (shouldReloadTimeline(action, state, bodyPage)) {
+  if (
+    (action === 'previous' || action === 'next') &&
+    shouldReloadTimeline(action, state, bodyPage)
+  ) {
     await reloadCurrentView()
     return
   }
@@ -425,6 +431,7 @@ registerBackgroundState(
     state = restoreReaderSnapshot(state, saved)
     bodyPage = 0
     galleryImageIndex = 0
+    threadReturnBodyPage = 0
     menuOpen = false
     menuError = null
     void render()
@@ -432,7 +439,7 @@ registerBackgroundState(
 )
 
 for (const button of document.querySelectorAll<HTMLButtonElement>('button[data-action]')) {
-  button.addEventListener('click', () => void handleAction(button.dataset.action as InputAction))
+  button.addEventListener('click', () => void handleAction(button.dataset.action as ReaderCommand))
 }
 for (const button of document.querySelectorAll<HTMLButtonElement>('button[data-feed]')) {
   button.addEventListener('click', () => {
@@ -456,6 +463,7 @@ element('pairing')?.addEventListener('submit', (event) => {
   appLayer = 'view-select'
   bodyPage = 0
   galleryImageIndex = 0
+  threadReturnBodyPage = 0
   menuOpen = false
   menuError = null
   void render()
@@ -467,6 +475,7 @@ element('forget-device')?.addEventListener('click', () => {
   appLayer = 'view-select'
   bodyPage = 0
   galleryImageIndex = 0
+  threadReturnBodyPage = 0
   menuOpen = false
   menuError = null
   void render()
@@ -1034,9 +1043,14 @@ async function startGlasses(): Promise<void> {
   const unsubscribe = bridge.onEvenHubEvent((event: EvenHubEvent) => {
     queue = queue
       .then(async () => {
-        const action = classifyInput(event)
-        if (action === 'double-tap') {
-          const destination = doubleTapDestination(appLayer, menuOpen)
+        const intent = classifyInput(event)
+        if (!intent) return
+        if (intent.type === 'back') {
+          const destination = backDestination({
+            layer: appLayer,
+            menuOpen,
+            readerMode: state.mode,
+          })
           if (destination === 'exit') {
             await bridge.shutDownPageContainer(1)
           } else if (destination === 'close-menu') {
@@ -1045,28 +1059,34 @@ async function startGlasses(): Promise<void> {
             await render()
           } else if (destination === 'reader') {
             await returnFromGallery()
+          } else if (destination === 'close-thread') {
+            await handleAction('toggle-detail')
           } else {
             await returnToViewSelection()
           }
           return
         }
-        if (action === 'cleanup') {
+        if (intent.type === 'cleanup') {
           unsubscribe()
           return
         }
-        if (appLayer === 'view-select') {
-          if (event.listEvent && (event.listEvent.eventType ?? 0) === 0) {
-            const feed = feedForViewIndex(event.listEvent.currentSelectItemIndex ?? 0)
+        if (intent.type === 'confirm') {
+          if (appLayer === 'view-select') {
+            const feed =
+              intent.selectionIndex === null ? null : feedForViewIndex(intent.selectionIndex)
             if (feed) await openView(feed)
+            return
           }
+          if (menuOpen) {
+            if (intent.selectionIndex !== null) {
+              await handleMenuSelection(intent.selectionIndex)
+            }
+            return
+          }
+          await handleAction('confirm')
           return
         }
-        if (menuOpen && event.listEvent && (event.listEvent.eventType ?? 0) === 0) {
-          // Protobuf omits zero-valued scalars, so the first item arrives without an index.
-          await handleMenuSelection(event.listEvent.currentSelectItemIndex ?? 0)
-          return
-        }
-        await handleAction(action)
+        await handleAction(intent.direction)
       })
       .catch((error: unknown) => console.error(error))
   })
