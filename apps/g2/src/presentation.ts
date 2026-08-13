@@ -8,6 +8,12 @@ export interface GlassesSections {
   author: string
   body: string
   avatarUrl: string | null
+  metricCounts: {
+    reply: string
+    repost: string
+    like: string
+  }
+  help: string
 }
 
 function clean(value: string): string {
@@ -43,14 +49,22 @@ function postSections(post: Post, state: ReaderState): GlassesSections {
   const header = `DOGE / ${feed}    ${state.index + 1}/${state.posts.length}`
   const author =
     `${clean(post.authorName)}\n@${clean(post.authorHandle)}  ${date(post.createdAt)}`.trim()
-  const metrics = `RE ${compact(post.replyCount)}  RP ${compact(post.repostCount)}  LIKE ${compact(post.likeCount)}  VIEW ${compact(post.viewCount)}`
   const help =
     state.mode === 'thread'
       ? 'UP next  DOWN back  TAP return  DOUBLE exit'
       : 'UP next  DOWN back  TAP thread  R1 feed  DOUBLE exit'
-  const fixed = `\n\n${metrics}\n${help}`
-  const body = `${trimTo(clean(post.text), MAX_CONTENT - fixed.length)}\n\n${metrics}\n${help}`
-  return { header, author, body, avatarUrl: post.authorAvatarUrl }
+  return {
+    header,
+    author,
+    body: trimTo(clean(post.text), MAX_CONTENT),
+    avatarUrl: post.authorAvatarUrl,
+    metricCounts: {
+      reply: compact(post.replyCount),
+      repost: compact(post.repostCount),
+      like: compact(post.likeCount),
+    },
+    help,
+  }
 }
 
 export function renderGlassesSections(state: ReaderState): GlassesSections {
@@ -60,6 +74,8 @@ export function renderGlassesSections(state: ReaderState): GlassesSections {
       author: '',
       body: `Unable to load the timeline.\n${clean(state.error ?? 'Unknown error')}\n\nTAP retry  R1 switch feed  DOUBLE exit`,
       avatarUrl: null,
+      metricCounts: { reply: '', repost: '', like: '' },
+      help: '',
     }
   }
   if (state.status === 'loading' && state.posts.length === 0) {
@@ -68,6 +84,8 @@ export function renderGlassesSections(state: ReaderState): GlassesSections {
       author: '',
       body: 'Loading…\n\nR1 switch feed  DOUBLE exit',
       avatarUrl: null,
+      metricCounts: { reply: '', repost: '', like: '' },
+      help: '',
     }
   }
   const post = state.posts[state.index]
@@ -78,13 +96,23 @@ export function renderGlassesSections(state: ReaderState): GlassesSections {
         author: '',
         body: 'No posts found.\n\nR1 switch feed  DOUBLE exit',
         avatarUrl: null,
+        metricCounts: { reply: '', repost: '', like: '' },
+        help: '',
       }
 }
 
 export function renderGlassesText(state: ReaderState): string {
   const sections = renderGlassesSections(state)
   return trimTo(
-    [sections.header, sections.author, sections.body].filter(Boolean).join('\n'),
+    [
+      sections.header,
+      sections.author,
+      sections.body,
+      ...Object.values(sections.metricCounts),
+      sections.help,
+    ]
+      .filter(Boolean)
+      .join('\n'),
     MAX_CONTENT,
   )
 }

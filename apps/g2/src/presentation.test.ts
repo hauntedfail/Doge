@@ -26,10 +26,17 @@ describe('renderGlassesText', () => {
     expect(output).not.toContain('\u0000')
     expect(output).toContain('DOGE / HOME')
     expect(output).toContain('@ada')
-    expect(renderGlassesSections(state)).toMatchObject({
+    const sections = renderGlassesSections(state)
+    expect(sections).toMatchObject({
       header: expect.stringContaining('DOGE / HOME'),
       author: expect.stringContaining('@ada'),
       avatarUrl: 'https://pbs.twimg.com/profile_images/1/ada_normal.jpg',
+      metricCounts: {
+        reply: '1',
+        repost: '2',
+        like: '3',
+      },
     })
+    expect(sections.body).not.toMatch(/\b(?:RE|RP|LIKE|VIEW)\b/u)
   })
 })
