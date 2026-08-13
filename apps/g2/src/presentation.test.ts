@@ -39,7 +39,7 @@ describe('renderGlassesText', () => {
     expect(output).toContain('@ada')
     const sections = renderGlassesSections(state)
     expect(sections).toMatchObject({
-      header: expect.stringContaining('DOGE / HOME'),
+      header: 'DOGE / HOME    1/1',
       author: expect.stringContaining('@ada'),
       avatarUrl: 'https://pbs.twimg.com/profile_images/1/ada_normal.jpg',
       postImageUrl: null,
@@ -54,6 +54,7 @@ describe('renderGlassesText', () => {
       'https://pbs.twimg.com/media/Example123?format=jpg&name=small',
     )
     expect(finalSections.postImageKind).toBe('video_thumbnail')
+    expect(sections.bodyPageCount).toBeGreaterThan(2)
     expect(sections.body).not.toMatch(/\b(?:RE|RP|LIKE|VIEW)\b/u)
     expect(sections).not.toHaveProperty('help')
     expect(output).not.toMatch(/(?:UP|DOWN|TAP|DOUBLE) (?:next|back|actions|views|exit)/u)

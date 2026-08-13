@@ -1,5 +1,5 @@
 import type { Post, PostImageKind } from '@even-g2-x-reader/contracts'
-import { paginatePostBody } from './post-pages.js'
+import { scrollPostBody } from './post-pages.js'
 import type { ReaderState } from './reader-state.js'
 
 export interface GlassesSections {
@@ -41,29 +41,28 @@ function date(value: string): string {
   }).format(parsed)
 }
 
-function postSections(post: Post, state: ReaderState, requestedPage: number): GlassesSections {
+function postSections(post: Post, state: ReaderState, requestedPosition: number): GlassesSections {
   const feed = state.mode === 'thread' ? 'THREAD' : state.feed.toUpperCase()
-  const pages = paginatePostBody(clean(post.text), post.images.length > 0)
-  const bodyPage = Math.min(Math.max(0, requestedPage), pages.length - 1)
-  const displayPage = pages[bodyPage] ?? { body: '', showsImage: false }
-  const pageMarker = pages.length > 1 ? ` · ${bodyPage + 1}/${pages.length}` : ''
-  const header = `DOGE / ${feed}    ${state.index + 1}/${state.posts.length}${pageMarker}`
+  const frames = scrollPostBody(clean(post.text), post.images.length > 0)
+  const bodyPage = Math.min(Math.max(0, requestedPosition), frames.length - 1)
+  const displayFrame = frames[bodyPage] ?? { body: '', showsImage: false }
+  const header = `DOGE / ${feed}    ${state.index + 1}/${state.posts.length}`
   const author =
     `${clean(post.authorName)}\n@${clean(post.authorHandle)}  ${date(post.createdAt)}`.trim()
   return {
     header,
     author,
-    body: displayPage.body,
+    body: displayFrame.body,
     avatarUrl: post.authorAvatarUrl,
-    postImageUrl: displayPage.showsImage ? (post.images[0]?.url ?? null) : null,
-    postImageKind: displayPage.showsImage ? (post.images[0]?.kind ?? null) : null,
+    postImageUrl: displayFrame.showsImage ? (post.images[0]?.url ?? null) : null,
+    postImageKind: displayFrame.showsImage ? (post.images[0]?.kind ?? null) : null,
     metricCounts: {
       reply: compact(post.replyCount),
       repost: compact(post.repostCount),
       like: compact(post.likeCount),
     },
     bodyPage,
-    bodyPageCount: pages.length,
+    bodyPageCount: frames.length,
   }
 }
 
