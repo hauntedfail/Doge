@@ -24,6 +24,7 @@ function postsFor(feed: Feed): Post[] {
     id: String(baseId[feed] + index + 1),
     authorName: index === 0 ? 'G2 Reader' : 'Safe Relay',
     authorHandle: index === 0 ? 'g2_reader' : 'local_gateway',
+    authorAvatarUrl: null,
     text,
     createdAt: new Date(Date.UTC(2026, 7, 12, index, 0, 0)).toISOString(),
     replyCount: index,

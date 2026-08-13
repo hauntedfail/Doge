@@ -3,6 +3,7 @@ import { feedSchema } from '@even-g2-x-reader/contracts'
 import { Hono } from 'hono'
 import { secureHeaders } from 'hono/secure-headers'
 import { z } from 'zod'
+import { loadAvatar, parseAvatarUrl } from './avatar.js'
 import type { TimelineSource } from './source.js'
 
 export interface AppOptions {
@@ -71,6 +72,22 @@ export function createApp(options: AppOptions): Hono {
       return context.json({ error: { code: 'invalid_request', message: 'Invalid post ID' } }, 400)
     }
     return context.json(await options.source.thread(id.data))
+  })
+  app.get('/api/v1/avatar', async (context) => {
+    const url = parseAvatarUrl(context.req.query('url'))
+    if (!url) {
+      return context.json(
+        { error: { code: 'invalid_request', message: 'Invalid avatar URL' } },
+        400,
+      )
+    }
+    const avatar = await loadAvatar(url)
+    const body = new Uint8Array(avatar.bytes.byteLength)
+    body.set(avatar.bytes)
+    context.header('cache-control', 'private, max-age=3600')
+    context.header('content-type', avatar.contentType)
+    context.header('x-content-type-options', 'nosniff')
+    return context.body(body.buffer)
   })
   app.onError((error, context) => {
     console.error(error)

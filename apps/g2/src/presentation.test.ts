@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { renderGlassesText } from './presentation.js'
+import { renderGlassesSections, renderGlassesText } from './presentation.js'
 import { initialReaderState, reduceReaderState } from './reader-state.js'
 
 describe('renderGlassesText', () => {
@@ -8,6 +8,7 @@ describe('renderGlassesText', () => {
       id: '1',
       authorName: 'Ada\u0000',
       authorHandle: 'ada',
+      authorAvatarUrl: 'https://pbs.twimg.com/profile_images/1/ada_normal.jpg',
       text: 'x'.repeat(3000),
       createdAt: '2026-08-12T00:00:00.000Z',
       replyCount: 1,
@@ -25,5 +26,10 @@ describe('renderGlassesText', () => {
     expect(output).not.toContain('\u0000')
     expect(output).toContain('DOGE / HOME')
     expect(output).toContain('@ada')
+    expect(renderGlassesSections(state)).toMatchObject({
+      header: expect.stringContaining('DOGE / HOME'),
+      author: expect.stringContaining('@ada'),
+      avatarUrl: 'https://pbs.twimg.com/profile_images/1/ada_normal.jpg',
+    })
   })
 })

@@ -7,6 +7,7 @@ export const postSchema = z.object({
   id: z.string().min(1),
   authorName: z.string().min(1),
   authorHandle: z.string().min(1),
+  authorAvatarUrl: z.url().nullable(),
   text: z.string(),
   createdAt: z.string(),
   replyCount: z.number().int().nonnegative(),

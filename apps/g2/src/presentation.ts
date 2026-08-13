@@ -3,6 +3,13 @@ import type { ReaderState } from './reader-state.js'
 
 const MAX_CONTENT = 1000
 
+export interface GlassesSections {
+  header: string
+  author: string
+  body: string
+  avatarUrl: string | null
+}
+
 function clean(value: string): string {
   return value.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/gu, '')
 }
@@ -31,31 +38,53 @@ function trimTo(value: string, max: number): string {
   return characters.length <= max ? value : `${characters.slice(0, Math.max(0, max - 1)).join('')}…`
 }
 
-function postText(post: Post, state: ReaderState): string {
+function postSections(post: Post, state: ReaderState): GlassesSections {
   const feed = state.mode === 'thread' ? 'THREAD' : state.feed.toUpperCase()
   const header = `DOGE / ${feed}    ${state.index + 1}/${state.posts.length}`
   const author =
-    `${clean(post.authorName)}  @${clean(post.authorHandle)}  ${date(post.createdAt)}`.trim()
+    `${clean(post.authorName)}\n@${clean(post.authorHandle)}  ${date(post.createdAt)}`.trim()
   const metrics = `RE ${compact(post.replyCount)}  RP ${compact(post.repostCount)}  LIKE ${compact(post.likeCount)}  VIEW ${compact(post.viewCount)}`
   const help =
     state.mode === 'thread'
       ? 'UP next  DOWN back  TAP return  DOUBLE exit'
       : 'UP next  DOWN back  TAP thread  R1 feed  DOUBLE exit'
-  const fixed = `${header}\n${author}\n\n\n${metrics}\n${help}`
-  return `${header}\n${author}\n\n${trimTo(clean(post.text), MAX_CONTENT - fixed.length)}\n\n${metrics}\n${help}`
+  const fixed = `\n\n${metrics}\n${help}`
+  const body = `${trimTo(clean(post.text), MAX_CONTENT - fixed.length)}\n\n${metrics}\n${help}`
+  return { header, author, body, avatarUrl: post.authorAvatarUrl }
+}
+
+export function renderGlassesSections(state: ReaderState): GlassesSections {
+  if (state.status === 'error') {
+    return {
+      header: `DOGE / ${state.feed.toUpperCase()}`,
+      author: '',
+      body: `Unable to load the timeline.\n${clean(state.error ?? 'Unknown error')}\n\nTAP retry  R1 switch feed  DOUBLE exit`,
+      avatarUrl: null,
+    }
+  }
+  if (state.status === 'loading' && state.posts.length === 0) {
+    return {
+      header: `DOGE / ${state.feed.toUpperCase()}`,
+      author: '',
+      body: 'Loading…\n\nR1 switch feed  DOUBLE exit',
+      avatarUrl: null,
+    }
+  }
+  const post = state.posts[state.index]
+  return post
+    ? postSections(post, state)
+    : {
+        header: `DOGE / ${state.feed.toUpperCase()}`,
+        author: '',
+        body: 'No posts found.\n\nR1 switch feed  DOUBLE exit',
+        avatarUrl: null,
+      }
 }
 
 export function renderGlassesText(state: ReaderState): string {
-  let output: string
-  if (state.status === 'error') {
-    output = `DOGE / ${state.feed.toUpperCase()}\n\nUnable to load the timeline.\n${clean(state.error ?? 'Unknown error')}\n\nTAP retry  R1 switch feed  DOUBLE exit`
-  } else if (state.status === 'loading' && state.posts.length === 0) {
-    output = `DOGE / ${state.feed.toUpperCase()}\n\nLoading…\n\nR1 switch feed  DOUBLE exit`
-  } else {
-    const post = state.posts[state.index]
-    output = post
-      ? postText(post, state)
-      : `DOGE / ${state.feed.toUpperCase()}\n\nNo posts found.\n\nR1 switch feed  DOUBLE exit`
-  }
-  return trimTo(output, MAX_CONTENT)
+  const sections = renderGlassesSections(state)
+  return trimTo(
+    [sections.header, sections.author, sections.body].filter(Boolean).join('\n'),
+    MAX_CONTENT,
+  )
 }

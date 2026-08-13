@@ -1,4 +1,5 @@
 import type { Feed, Post, Thread, TimelinePage } from '@even-g2-x-reader/contracts'
+import { parseAvatarUrl } from './avatar.js'
 
 type JsonObject = Record<string, unknown>
 
@@ -51,6 +52,7 @@ function postFromObject(candidate: JsonObject): Post | undefined {
   const user = objectAt(candidate, 'core', 'user_results', 'result')
   const userCore = user ? objectAt(user, 'core') : undefined
   const userLegacy = user ? objectAt(user, 'legacy') : undefined
+  const userAvatar = user ? objectAt(user, 'avatar') : undefined
   const note = objectAt(candidate, 'note_tweet', 'note_tweet_results', 'result')
   const views = objectAt(candidate, 'views')
   const text = stringAt(note, 'text') ?? stringAt(legacy, 'full_text') ?? ''
@@ -60,6 +62,10 @@ function postFromObject(candidate: JsonObject): Post | undefined {
     authorName: stringAt(userCore, 'name') ?? stringAt(userLegacy, 'name') ?? 'Unknown',
     authorHandle:
       stringAt(userCore, 'screen_name') ?? stringAt(userLegacy, 'screen_name') ?? 'unknown',
+    authorAvatarUrl:
+      parseAvatarUrl(
+        stringAt(userAvatar, 'image_url') ?? stringAt(userLegacy, 'profile_image_url_https'),
+      )?.href ?? null,
     text,
     createdAt: normaliseDate(stringAt(legacy, 'created_at')),
     replyCount: countAt(legacy, 'reply_count'),

@@ -5,6 +5,7 @@ const posts = ['1', '2'].map((id) => ({
   id,
   authorName: `Author ${id}`,
   authorHandle: `author${id}`,
+  authorAvatarUrl: null,
   text: `Post ${id}`,
   createdAt: '2026-08-12T00:00:00.000Z',
   replyCount: 0,

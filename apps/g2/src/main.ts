@@ -1,6 +1,9 @@
 import './style.css'
 import {
   CreateStartUpPageContainer,
+  ImageContainerProperty,
+  ImageRawDataUpdate,
+  ImageRawDataUpdateResult,
   RebuildPageContainer,
   StartUpPageCreateResult,
   TextContainerProperty,
@@ -8,11 +11,11 @@ import {
   waitForEvenAppBridge,
   type EvenHubEvent,
 } from '@evenrealities/even_hub_sdk'
-import { loadThread, loadTimeline } from './api.js'
+import { loadAvatarImage, loadThread, loadTimeline } from './api.js'
 import { browserAccessToken, clearBrowserAccessToken, saveBrowserAccessToken } from './auth.js'
 import { registerBackgroundState } from './background-state.js'
 import { classifyInput, type InputAction } from './input.js'
-import { renderGlassesText } from './presentation.js'
+import { renderGlassesSections } from './presentation.js'
 import {
   initialReaderState,
   readerSnapshot,
@@ -21,8 +24,15 @@ import {
   type ReaderState,
 } from './reader-state.js'
 
-const CONTAINER_ID = 1
-const CONTAINER_NAME = 'doge_reader'
+const HEADER_ID = 1
+const AUTHOR_ID = 2
+const BODY_ID = 3
+const AVATAR_ID = 4
+const HEADER_NAME = 'doge_header'
+const AUTHOR_NAME = 'doge_author'
+const BODY_NAME = 'doge_body'
+const AVATAR_NAME = 'doge_avatar'
+const AVATAR_SIZE = 48
 let state: ReaderState = initialReaderState()
 let updateGlasses: (() => Promise<void>) | undefined
 let stateRevision = 0
@@ -181,52 +191,172 @@ updatePhone()
 
 async function startGlasses(): Promise<void> {
   const bridge = await waitForEvenAppBridge()
-  let renderedLength = 0
-  const container = (content: string) =>
+  const renderedLengths = new Map<number, number>()
+  const avatarCache = new Map<string, Promise<ArrayBuffer>>()
+  let renderedAvatarUrl: string | null | undefined
+  let bridgeQueue = Promise.resolve()
+
+  const textContainer = (
+    containerID: number,
+    containerName: string,
+    xPosition: number,
+    yPosition: number,
+    width: number,
+    height: number,
+    zOrderIndex: number,
+    content: string,
+    isEventCapture = 0,
+  ) =>
     new TextContainerProperty({
-      xPosition: 0,
-      yPosition: 0,
-      width: 576,
-      height: 288,
+      xPosition,
+      yPosition,
+      width,
+      height,
       borderWidth: 0,
       borderColor: 0,
       borderRadius: 0,
-      paddingLength: 12,
-      containerID: CONTAINER_ID,
-      containerName: CONTAINER_NAME,
-      isEventCapture: 1,
+      paddingLength: 4,
+      containerID,
+      containerName,
+      isEventCapture,
+      zOrderIndex,
       content,
     })
-  const initial = renderGlassesText(state)
+
+  const avatarContainer = () =>
+    new ImageContainerProperty({
+      xPosition: 12,
+      yPosition: 38,
+      width: AVATAR_SIZE,
+      height: AVATAR_SIZE,
+      containerID: AVATAR_ID,
+      containerName: AVATAR_NAME,
+      zOrderIndex: 4,
+    })
+
+  const page = (sections: ReturnType<typeof renderGlassesSections>) => {
+    const textObject = [
+      textContainer(HEADER_ID, HEADER_NAME, 8, 4, 560, 28, 1, sections.header),
+      textContainer(AUTHOR_ID, AUTHOR_NAME, 72, 36, 492, 58, 2, sections.author),
+      textContainer(BODY_ID, BODY_NAME, 8, 100, 560, 184, 3, sections.body, 1),
+    ]
+    return { textObject, imageObject: [avatarContainer()] }
+  }
+
+  const fallbackAvatar = (): string => {
+    const canvas = document.createElement('canvas')
+    canvas.width = AVATAR_SIZE
+    canvas.height = AVATAR_SIZE
+    const context = canvas.getContext('2d')
+    if (context) {
+      context.clearRect(0, 0, AVATAR_SIZE, AVATAR_SIZE)
+      context.strokeStyle = '#fff'
+      context.lineWidth = 3
+      context.beginPath()
+      context.arc(24, 24, 21, 0, Math.PI * 2)
+      context.stroke()
+      context.beginPath()
+      context.arc(24, 18, 7, 0, Math.PI * 2)
+      context.stroke()
+      context.beginPath()
+      context.arc(24, 42, 14, Math.PI, 0)
+      context.stroke()
+    }
+    return canvas.toDataURL('image/png').split(',', 2)[1] ?? ''
+  }
+
+  const avatarData = async (url: string | null): Promise<ArrayBuffer | string> => {
+    if (!url) return fallbackAvatar()
+    let pending = avatarCache.get(url)
+    if (!pending) {
+      pending = loadAvatarImage(url)
+      avatarCache.set(url, pending)
+      if (avatarCache.size > 64) avatarCache.delete(avatarCache.keys().next().value ?? '')
+    }
+    try {
+      return await pending
+    } catch (error) {
+      avatarCache.delete(url)
+      console.warn('Unable to load avatar', error)
+      return fallbackAvatar()
+    }
+  }
+
+  const updateAvatar = async (url: string | null, force = false): Promise<void> => {
+    if (!force && renderedAvatarUrl === url) return
+    const result = await bridge.updateImageRawData(
+      new ImageRawDataUpdate({
+        containerID: AVATAR_ID,
+        containerName: AVATAR_NAME,
+        imageData: await avatarData(url),
+      }),
+    )
+    if (result !== ImageRawDataUpdateResult.success) {
+      console.warn(`Avatar update failed: ${result}`)
+      return
+    }
+    renderedAvatarUrl = url
+  }
+
+  const initial = renderGlassesSections(state)
+  const initialPage = page(initial)
   const result = await bridge.createStartUpPageContainer(
     new CreateStartUpPageContainer({
-      containerTotalNum: 1,
-      textObject: [container(initial)],
+      containerTotalNum: 4,
+      textObject: initialPage.textObject,
+      imageObject: initialPage.imageObject,
     }),
   )
   if (result !== StartUpPageCreateResult.success)
     throw new Error(`Unable to create G2 page: ${result}`)
-  renderedLength = initial.length
-  updateGlasses = async () => {
-    const content = renderGlassesText(state)
-    const upgraded = await bridge.textContainerUpgrade(
-      new TextContainerUpgrade({
-        containerID: CONTAINER_ID,
-        containerName: CONTAINER_NAME,
-        contentOffset: 0,
-        contentLength: renderedLength,
-        content,
-      }),
-    )
-    if (!upgraded) {
-      await bridge.rebuildPageContainer(
-        new RebuildPageContainer({
-          containerTotalNum: 1,
-          textObject: [container(content)],
+  for (const text of initialPage.textObject) {
+    renderedLengths.set(text.containerID ?? 0, text.content?.length ?? 0)
+  }
+  await updateAvatar(initial.avatarUrl, true)
+
+  const draw = async (): Promise<void> => {
+    const sections = renderGlassesSections(state)
+    const nextPage = page(sections)
+    let needsRebuild = false
+    for (const text of nextPage.textObject) {
+      const containerID = text.containerID ?? 0
+      const containerName = text.containerName ?? ''
+      const content = text.content ?? ''
+      const upgraded = await bridge.textContainerUpgrade(
+        new TextContainerUpgrade({
+          containerID,
+          containerName,
+          contentOffset: 0,
+          contentLength: renderedLengths.get(containerID) ?? 0,
+          content,
         }),
       )
+      if (!upgraded) {
+        needsRebuild = true
+        break
+      }
+      renderedLengths.set(containerID, content.length)
     }
-    renderedLength = content.length
+    if (needsRebuild) {
+      await bridge.rebuildPageContainer(
+        new RebuildPageContainer({
+          containerTotalNum: 4,
+          textObject: nextPage.textObject,
+          imageObject: nextPage.imageObject,
+        }),
+      )
+      for (const text of nextPage.textObject) {
+        renderedLengths.set(text.containerID ?? 0, text.content?.length ?? 0)
+      }
+      await updateAvatar(sections.avatarUrl, true)
+      return
+    }
+    await updateAvatar(sections.avatarUrl)
+  }
+  updateGlasses = () => {
+    const task = bridgeQueue.then(draw)
+    bridgeQueue = task.catch((error: unknown) => console.error(error))
+    return task
   }
 
   let queue = Promise.resolve()

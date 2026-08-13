@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TimelineSource } from './source.js'
 import { createApp } from './app.js'
 
@@ -6,6 +6,7 @@ const post = {
   id: '1',
   authorName: 'Ada',
   authorHandle: 'ada',
+  authorAvatarUrl: 'https://pbs.twimg.com/profile_images/1/ada_normal.jpg',
   text: 'Hello',
   createdAt: '2026-08-12T00:00:00.000Z',
   replyCount: 0,
@@ -13,6 +14,8 @@ const post = {
   likeCount: 1,
   viewCount: 2,
 }
+
+afterEach(() => vi.unstubAllGlobals())
 
 function source(): TimelineSource {
   return {
@@ -27,12 +30,17 @@ describe('gateway', () => {
     expect((await app.request('/api/v1/timeline?feed=home')).status).toBe(200)
     expect((await app.request('/api/v1/timeline?feed=likes')).status).toBe(400)
     expect((await app.request('/api/v1/posts/1/thread')).status).toBe(200)
+    expect((await app.request('/api/v1/avatar')).status).toBe(400)
     expect((await app.request('/i/api/graphql/anything', { method: 'POST' })).status).toBe(404)
     expect((await app.request('/api/v1/timeline?feed=home', { method: 'POST' })).status).toBe(404)
   })
 
   it('enforces bearer auth when configured', async () => {
-    const app = createApp({ source: source(), bearerToken: 'secret', allowedOrigins: [] })
+    const app = createApp({
+      source: source(),
+      bearerToken: 'secret',
+      allowedOrigins: [],
+    })
     expect((await app.request('/api/v1/timeline?feed=home')).status).toBe(401)
     expect(
       (
@@ -112,5 +120,93 @@ describe('gateway', () => {
         allowBearerCors: true,
       }),
     ).toThrow('allowBearerCors requires bearerToken')
+  })
+
+  it('proxies only bounded profile images from pbs.twimg.com', async () => {
+    const image = new Uint8Array([0xff, 0xd8, 0xff, 0xd9])
+    const upstream = vi.fn(
+      async () =>
+        new Response(image, {
+          status: 200,
+          headers: { 'content-length': String(image.byteLength), 'content-type': 'image/jpeg' },
+        }),
+    )
+    vi.stubGlobal('fetch', upstream)
+    const app = createApp({
+      source: source(),
+      bearerToken: 'secret',
+      allowedOrigins: [],
+      allowBearerCors: true,
+    })
+    const url = encodeURIComponent('https://pbs.twimg.com/profile_images/1/ada_normal.jpg')
+    const response = await app.request(`/api/v1/avatar?url=${url}`, {
+      headers: {
+        authorization: 'Bearer secret',
+        origin: 'capacitor://localhost',
+      },
+    })
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('content-type')).toBe('image/jpeg')
+    expect(response.headers.get('access-control-allow-origin')).toBe('capacitor://localhost')
+    expect(new Uint8Array(await response.arrayBuffer())).toEqual(image)
+    expect(upstream).toHaveBeenCalledWith(
+      new URL('https://pbs.twimg.com/profile_images/1/ada_normal.jpg'),
+      expect.objectContaining({ redirect: 'manual' }),
+    )
+  })
+
+  it('rejects arbitrary avatar hosts without making an upstream request', async () => {
+    const upstream = vi.fn()
+    vi.stubGlobal('fetch', upstream)
+    const app = createApp({ source: source(), bearerToken: 'secret', allowedOrigins: [] })
+    const url = encodeURIComponent('http://127.0.0.1:6900/health')
+    const response = await app.request(`/api/v1/avatar?url=${url}`, {
+      headers: { authorization: 'Bearer secret' },
+    })
+
+    expect(response.status).toBe(400)
+    expect(upstream).not.toHaveBeenCalled()
+  })
+
+  it('does not follow avatar redirects and rejects oversized images', async () => {
+    const app = createApp({ source: source(), bearerToken: 'secret', allowedOrigins: [] })
+    const url = encodeURIComponent('https://pbs.twimg.com/profile_images/1/ada_normal.jpg')
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(null, {
+            status: 302,
+            headers: { location: 'http://127.0.0.1:6900/health' },
+          }),
+      ),
+    )
+    expect(
+      (
+        await app.request(`/api/v1/avatar?url=${url}`, {
+          headers: { authorization: 'Bearer secret' },
+        })
+      ).status,
+    ).toBe(502)
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(new Uint8Array([0]), {
+            status: 200,
+            headers: { 'content-length': '524289', 'content-type': 'image/jpeg' },
+          }),
+      ),
+    )
+    expect(
+      (
+        await app.request(`/api/v1/avatar?url=${url}`, {
+          headers: { authorization: 'Bearer secret' },
+        })
+      ).status,
+    ).toBe(502)
   })
 })

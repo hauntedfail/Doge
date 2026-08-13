@@ -124,6 +124,7 @@ h2 {
   color: #a8b8ae;
   font-size: 14px;
 }
+
 .post {
   margin: 0;
   font-size: clamp(20px, 5.5vw, 29px);

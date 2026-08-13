@@ -22,8 +22,8 @@ twitter_api_safe_relay :6900 (localhost only)
 ログイン済みX browser profile
 ```
 
-- `apps/g2` — Even Hub SDK、576×288 glasses UI、iPhone companion UI
-- `apps/gateway` — Hono/Node.jsのread-only gateway、Xレスポンス正規化
+- `apps/g2` — Even Hub SDK、576×288 glasses UI、投稿者icon、iPhone companion UI
+- `apps/gateway` — Hono/Node.jsのread-only gateway、Xレスポンス正規化、avatar画像proxy
 - `packages/contracts` — frontendとgatewayで共有するZod schema
 - `scripts` — relay catalog同期とproduction origin生成
 
@@ -156,12 +156,13 @@ npm run production:start
 
 ## Security defaults
 
-- public client routeは`GET /api/v1/timeline`と`GET /api/v1/posts/:id/thread`のみ
+- public client routeはtimeline、thread、avatar画像のread-only `GET`のみ
 - feed、cursor、post IDをschema検証
 - relay base URLはloopback HTTPのみ許可
 - relay operationはHomeTimeline、HomeLatestTimeline、Bookmarks、TweetDetailだけ
 - XのGraphQL errorをHTTP 200でも失敗として扱う
 - upstream timeout 15秒、response上限5 MB
+- avatar proxyは`pbs.twimg.com/profile_images`のHTTPS画像だけを許可し、redirect禁止、5秒timeout、512 KB上限、画像content-type必須
 - responseは固定DTOへ変換し、X cookieや内部headerをclientへ返さない
 - production responseは`no-store`、security headers付き
 - 本番gatewayはBearer token必須。tokenを`.ehpk`へ埋め込まず、各iPhoneで一度だけpair

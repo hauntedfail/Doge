@@ -20,7 +20,13 @@ const raw = {
                           rest_id: '42',
                           core: {
                             user_results: {
-                              result: { legacy: { name: 'Ada Lovelace', screen_name: 'ada' } },
+                              result: {
+                                avatar: {
+                                  image_url:
+                                    'https://pbs.twimg.com/profile_images/42/ada_normal.jpg',
+                                },
+                                legacy: { name: 'Ada Lovelace', screen_name: 'ada' },
+                              },
                             },
                           },
                           legacy: {
@@ -39,7 +45,13 @@ const raw = {
                               rest_id: '99',
                               core: {
                                 user_results: {
-                                  result: { legacy: { name: 'Quoted', screen_name: 'quoted' } },
+                                  result: {
+                                    avatar: {
+                                      image_url:
+                                        'https://pbs.twimg.com/profile_images/99/quoted_normal.jpg',
+                                    },
+                                    legacy: { name: 'Quoted', screen_name: 'quoted' },
+                                  },
                                 },
                               },
                               legacy: {
@@ -78,6 +90,7 @@ describe('parseTimeline', () => {
           id: '42',
           authorName: 'Ada Lovelace',
           authorHandle: 'ada',
+          authorAvatarUrl: 'https://pbs.twimg.com/profile_images/42/ada_normal.jpg',
           text: 'long-form text wins',
           createdAt: '2026-08-12T00:00:00.000Z',
           replyCount: 3,
@@ -114,7 +127,19 @@ describe('parseTimeline', () => {
     expect(parseTimeline(current, 'home').posts[0]).toMatchObject({
       authorName: 'Current Name',
       authorHandle: 'current_handle',
+      authorAvatarUrl: 'https://pbs.twimg.com/profile_images/42/ada_normal.jpg',
     })
+  })
+
+  it('drops avatar URLs outside the fixed Twitter image origin', () => {
+    const unsafe = structuredClone(raw)
+    const user = unsafe.data.home.timeline.instructions[0]?.entries[0]?.content?.itemContent
+      ?.tweet_results?.result?.tweet.core.user_results.result as
+      { avatar?: { image_url?: string } } | undefined
+    if (!user?.avatar) throw new Error('test fixture is missing its avatar')
+    user.avatar.image_url = 'http://127.0.0.1:6900/health'
+
+    expect(parseTimeline(unsafe, 'home').posts[0]?.authorAvatarUrl).toBeNull()
   })
 })
 
