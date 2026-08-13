@@ -38,6 +38,7 @@ function postsFor(feed: Feed): Post[] {
     repostCount: index * 2,
     likeCount: index * 3,
     viewCount: (index + 1) * 100,
+    bookmarkCount: index,
     images: [],
     viewerHasLiked: false,
     viewerHasReposted: false,

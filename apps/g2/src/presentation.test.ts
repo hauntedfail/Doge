@@ -15,6 +15,7 @@ describe('renderGlassesText', () => {
       repostCount: 2,
       likeCount: 3,
       viewCount: 4,
+      bookmarkCount: 5,
       viewerHasLiked: false,
       viewerHasReposted: false,
       viewerHasBookmarked: false,
@@ -48,6 +49,8 @@ describe('renderGlassesText', () => {
         reply: '1',
         repost: '2',
         like: '3',
+        view: '4',
+        bookmark: '5',
       },
     })
     const finalSections = renderGlassesSections(state, sections.bodyPageCount - 1)

@@ -13,6 +13,7 @@ const post = {
   repostCount: 1,
   likeCount: 2,
   viewCount: null,
+  bookmarkCount: 0,
   images: [],
   viewerHasLiked: true,
   viewerHasReposted: false,

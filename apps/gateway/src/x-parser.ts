@@ -134,6 +134,7 @@ function postFromObject(candidate: JsonObject): Post | undefined {
     repostCount: countAt(legacy, 'retweet_count'),
     likeCount: countAt(legacy, 'favorite_count'),
     viewCount: views?.count === undefined ? null : countAt(views, 'count'),
+    bookmarkCount: legacy.bookmark_count === undefined ? null : countAt(legacy, 'bookmark_count'),
     images: imagesAt(legacy),
     viewerHasLiked: booleanAt(legacy, 'favorited'),
     viewerHasReposted: booleanAt(legacy, 'retweeted'),

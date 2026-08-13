@@ -1,19 +1,28 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  createMetricIconStripCache,
-  METRIC_ICON_KINDS,
-  METRIC_ICON_PATHS,
-  METRIC_ICON_SIZE,
-} from './metric-icons.js'
+import * as metricIcons from './metric-icons.js'
+
+const { createMetricIconStripCache, METRIC_ICON_KINDS, METRIC_ICON_PATHS, METRIC_ICON_SIZE } =
+  metricIcons
 
 describe('G2 metric icons', () => {
-  it('provides four distinct native-size X-style icons', () => {
-    expect(METRIC_ICON_SIZE).toBe(28)
-    expect(METRIC_ICON_KINDS).toEqual(['reply', 'repost', 'like', 'bookmark'])
+  it('provides five distinct compact X-style icons', () => {
+    expect(METRIC_ICON_SIZE).toBe(20)
+    expect(METRIC_ICON_KINDS).toEqual(['reply', 'repost', 'like', 'view', 'bookmark'])
 
     const paths = METRIC_ICON_KINDS.map((kind) => METRIC_ICON_PATHS[kind])
-    expect(new Set(paths).size).toBe(4)
+    expect(new Set(paths).size).toBe(5)
     expect(paths.every((path) => path.startsWith('M'))).toBe(true)
+  })
+
+  it('places all metric icons on equal horizontal centres', () => {
+    const iconX = (
+      metricIcons as typeof metricIcons & {
+        METRIC_ICON_X: Record<(typeof METRIC_ICON_KINDS)[number], number>
+      }
+    ).METRIC_ICON_X
+    const centres = METRIC_ICON_KINDS.map((kind) => iconX[kind] + METRIC_ICON_SIZE / 2)
+
+    expect(centres).toEqual([10, 77, 144, 211, 278])
   })
 
   it('rasterizes each viewer-reaction variant only once', () => {

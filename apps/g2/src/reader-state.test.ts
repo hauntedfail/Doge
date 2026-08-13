@@ -12,6 +12,7 @@ const posts = ['1', '2'].map((id) => ({
   repostCount: 0,
   likeCount: 0,
   viewCount: null,
+  bookmarkCount: 0,
   images: [],
   viewerHasLiked: false,
   viewerHasReposted: false,
@@ -92,6 +93,6 @@ describe('reader state', () => {
       reaction: 'bookmark',
       active: true,
     })
-    expect(state.posts[0]).toMatchObject({ viewerHasBookmarked: true })
+    expect(state.posts[0]).toMatchObject({ viewerHasBookmarked: true, bookmarkCount: 1 })
   })
 })

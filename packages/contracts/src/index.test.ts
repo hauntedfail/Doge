@@ -25,6 +25,7 @@ describe('timelinePageSchema', () => {
     expect(result.posts[0]?.authorHandle).toBe('ada')
     expect(result.posts[0]?.images).toEqual([])
     expect(result.posts[0]).toMatchObject({
+      bookmarkCount: null,
       viewerHasLiked: false,
       viewerHasReposted: false,
       viewerHasBookmarked: false,

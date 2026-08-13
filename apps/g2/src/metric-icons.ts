@@ -1,9 +1,9 @@
 import { canvasPngBytes } from './image-bytes.js'
 
-export const METRIC_ICON_SIZE = 28
+export const METRIC_ICON_SIZE = 20
 export const METRIC_STRIP_WIDTH = 288
 
-export const METRIC_ICON_KINDS = ['reply', 'repost', 'like', 'bookmark'] as const
+export const METRIC_ICON_KINDS = ['reply', 'repost', 'like', 'view', 'bookmark'] as const
 
 export type MetricIconKind = (typeof METRIC_ICON_KINDS)[number]
 
@@ -12,6 +12,7 @@ export const METRIC_ICON_PATHS: Readonly<Record<MetricIconKind, string>> = {
     'M12 3C7.03 3 3 6.58 3 11C3 13.48 4.28 15.7 6.3 17.17L5 21L9.34 18.82C10.2 18.94 11.09 19 12 19C16.97 19 21 15.42 21 11C21 6.58 16.97 3 12 3Z',
   repost: 'M17 3L21 7L17 11M3 7H21M7 21L3 17L7 13M21 17H3',
   like: 'M20.84 4.61C18.8 2.57 15.5 2.57 13.46 4.61L12 6.07L10.54 4.61C8.5 2.57 5.2 2.57 3.16 4.61C1.12 6.65 1.12 9.95 3.16 11.99L12 20.83L20.84 11.99C22.88 9.95 22.88 6.65 20.84 4.61Z',
+  view: 'M2 12C4.5 7.5 7.83 5.25 12 5.25C16.17 5.25 19.5 7.5 22 12C19.5 16.5 16.17 18.75 12 18.75C7.83 18.75 4.5 16.5 2 12ZM12 9C10.34 9 9 10.34 9 12C9 13.66 10.34 15 12 15C13.66 15 15 13.66 15 12C15 10.34 13.66 9 12 9Z',
   bookmark: 'M5 3H19V21L12 16L5 21Z',
 }
 
@@ -49,11 +50,12 @@ export function createMetricIconStripCache(
   }
 }
 
-const ICON_X: Readonly<Record<MetricIconKind, number>> = {
+export const METRIC_ICON_X: Readonly<Record<MetricIconKind, number>> = {
   reply: 0,
-  repost: 88,
-  like: 176,
-  bookmark: 260,
+  repost: 67,
+  like: 134,
+  view: 201,
+  bookmark: 268,
 }
 
 function isActive(kind: MetricIconKind, state: MetricViewerState): boolean {
@@ -84,7 +86,8 @@ export function renderMetricIcon(kind: MetricIconKind, active = false): Uint8Arr
   context.fillStyle = '#000'
   context.fillRect(0, 0, METRIC_ICON_SIZE, METRIC_ICON_SIZE)
   context.save()
-  context.translate(2, 2)
+  context.translate(1, 1)
+  context.scale(0.75, 0.75)
   drawIcon(context, kind, active)
   context.restore()
   return canvasPngBytes(canvas)
@@ -101,7 +104,8 @@ function rasterizeMetricIconStrip(state: MetricViewerState): Uint8Array {
   context.fillRect(0, 0, METRIC_STRIP_WIDTH, METRIC_ICON_SIZE)
   for (const kind of METRIC_ICON_KINDS) {
     context.save()
-    context.translate(ICON_X[kind] + 2, 2)
+    context.translate(METRIC_ICON_X[kind] + 1, 1)
+    context.scale(0.75, 0.75)
     drawIcon(context, kind, isActive(kind, state))
     context.restore()
   }

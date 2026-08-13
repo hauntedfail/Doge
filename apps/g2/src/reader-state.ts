@@ -96,7 +96,12 @@ function updatePostReaction(post: Post, postId: string, reaction: Reaction, acti
       repostCount: Math.max(0, post.repostCount + (active ? 1 : -1)),
     }
   }
-  return { ...post, viewerHasBookmarked: active }
+  return {
+    ...post,
+    viewerHasBookmarked: active,
+    bookmarkCount:
+      post.bookmarkCount === null ? null : Math.max(0, post.bookmarkCount + (active ? 1 : -1)),
+  }
 }
 
 export function reduceReaderState(state: ReaderState, action: ReaderAction): ReaderState {

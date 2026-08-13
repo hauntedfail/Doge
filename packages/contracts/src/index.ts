@@ -26,6 +26,7 @@ export const postSchema = z.object({
   repostCount: z.number().int().nonnegative(),
   likeCount: z.number().int().nonnegative(),
   viewCount: z.number().int().nonnegative().nullable(),
+  bookmarkCount: z.number().int().nonnegative().nullable().default(null),
   images: z.array(postImageSchema).max(4).default([]),
   viewerHasLiked: z.boolean().default(false),
   viewerHasReposted: z.boolean().default(false),

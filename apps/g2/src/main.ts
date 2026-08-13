@@ -34,6 +34,12 @@ import {
   type MetricIconKind,
 } from './metric-icons.js'
 import {
+  METRIC_FOOTER_LAYOUT,
+  METRIC_STRIP_X,
+  METRIC_STRIP_Y,
+  centreMetricCount,
+} from './metric-layout.js'
+import {
   POST_IMAGE_HEIGHT,
   POST_IMAGE_WIDTH,
   renderPostImage,
@@ -56,10 +62,12 @@ const AVATAR_ID = 4
 const REPLY_COUNT_ID = 5
 const REPOST_COUNT_ID = 6
 const LIKE_COUNT_ID = 7
+const VIEW_COUNT_ID = 8
 const METRIC_STRIP_ID = 9
 const POST_IMAGE_ID = 10
 const ACTION_MENU_BACKGROUND_ID = 11
 const ACTION_MENU_ID = 12
+const BOOKMARK_COUNT_ID = 13
 const VIEW_TITLE_ID = 20
 const VIEW_LIST_ID = 22
 const POSITION_NAME = 'doge_position'
@@ -69,6 +77,8 @@ const AVATAR_NAME = 'doge_avatar'
 const REPLY_COUNT_NAME = 'doge_reply_num'
 const REPOST_COUNT_NAME = 'doge_rp_num'
 const LIKE_COUNT_NAME = 'doge_like_num'
+const VIEW_COUNT_NAME = 'doge_view_num'
+const BOOKMARK_COUNT_NAME = 'doge_bm_num'
 const METRIC_STRIP_NAME = 'doge_metrics'
 const POST_IMAGE_NAME = 'doge_post_img'
 const ACTION_MENU_NAME = 'doge_actions'
@@ -84,45 +94,28 @@ const AVATAR_Y = 4
 const BODY_Y = 64
 const PLAIN_BODY_HEIGHT = 190
 const MEDIA_BODY_HEIGHT = 88
-const PLAIN_METRIC_Y = 258
-const MEDIA_METRIC_Y = 258
-const METRIC_COUNT_HEIGHT = 30
 const POSITION_X = 478
 const POSITION_WIDTH = 90
 const POST_IMAGE_X = 144
 const POST_IMAGE_Y = 156
 
-interface MetricLayout {
-  kind: Exclude<MetricIconKind, 'bookmark'>
+interface MetricText {
+  kind: MetricIconKind
   countID: number
   countName: string
-  countX: number
-  countWidth: number
 }
 
-const METRIC_LAYOUT: readonly MetricLayout[] = [
-  {
-    kind: 'reply',
-    countID: REPLY_COUNT_ID,
-    countName: REPLY_COUNT_NAME,
-    countX: 174,
-    countWidth: 48,
+const METRIC_TEXT: Readonly<Record<MetricIconKind, MetricText>> = {
+  reply: { kind: 'reply', countID: REPLY_COUNT_ID, countName: REPLY_COUNT_NAME },
+  repost: { kind: 'repost', countID: REPOST_COUNT_ID, countName: REPOST_COUNT_NAME },
+  like: { kind: 'like', countID: LIKE_COUNT_ID, countName: LIKE_COUNT_NAME },
+  view: { kind: 'view', countID: VIEW_COUNT_ID, countName: VIEW_COUNT_NAME },
+  bookmark: {
+    kind: 'bookmark',
+    countID: BOOKMARK_COUNT_ID,
+    countName: BOOKMARK_COUNT_NAME,
   },
-  {
-    kind: 'repost',
-    countID: REPOST_COUNT_ID,
-    countName: REPOST_COUNT_NAME,
-    countX: 262,
-    countWidth: 48,
-  },
-  {
-    kind: 'like',
-    countID: LIKE_COUNT_ID,
-    countName: LIKE_COUNT_NAME,
-    countX: 350,
-    countWidth: 48,
-  },
-]
+}
 let state: ReaderState = initialReaderState()
 let appLayer: AppLayer = 'view-select'
 let bodyPage = 0
@@ -443,10 +436,10 @@ async function startGlasses(): Promise<void> {
       zOrderIndex: 4,
     })
 
-  const metricStripContainer = (yPosition: number) =>
+  const metricStripContainer = () =>
     new ImageContainerProperty({
-      xPosition: POST_IMAGE_X,
-      yPosition,
+      xPosition: METRIC_STRIP_X,
+      yPosition: METRIC_STRIP_Y,
       width: METRIC_STRIP_WIDTH,
       height: METRIC_ICON_SIZE,
       containerID: METRIC_STRIP_ID,
@@ -478,7 +471,7 @@ async function startGlasses(): Promise<void> {
       containerID: ACTION_MENU_ID,
       containerName: ACTION_MENU_NAME,
       isEventCapture: 1,
-      zOrderIndex: 12,
+      zOrderIndex: 14,
       itemContainer: new ListItemContainerProperty({
         itemCount: items.length,
         itemWidth: 0,
@@ -495,7 +488,7 @@ async function startGlasses(): Promise<void> {
       height: 144,
       containerID: ACTION_MENU_BACKGROUND_ID,
       containerName: ACTION_MENU_BACKGROUND_NAME,
-      zOrderIndex: 11,
+      zOrderIndex: 13,
     })
 
   const viewList = () =>
@@ -542,18 +535,31 @@ async function startGlasses(): Promise<void> {
 
   const readerPage = (sections: ReturnType<typeof renderGlassesSections>) => {
     const hasPostImage = sections.postImageUrl !== null
-    const metricY = hasPostImage ? MEDIA_METRIC_Y : PLAIN_METRIC_Y
+    const post = state.posts[state.index]
+    const menuItems =
+      menuOpen && post
+        ? [
+            ...(menuError ? [menuError.slice(0, 64)] : []),
+            ...reactionMenuItems(post).map((item) =>
+              item === 'Open thread' && state.mode === 'thread' ? 'Close thread' : item,
+            ),
+          ]
+        : []
     const textObject = [
-      textContainer(
-        POSITION_ID,
-        POSITION_NAME,
-        POSITION_X,
-        metricY - 4,
-        POSITION_WIDTH,
-        METRIC_COUNT_HEIGHT,
-        10,
-        sections.position,
-      ),
+      ...(menuItems.length === 0
+        ? [
+            textContainer(
+              POSITION_ID,
+              POSITION_NAME,
+              POSITION_X,
+              258,
+              POSITION_WIDTH,
+              28,
+              12,
+              sections.position,
+            ),
+          ]
+        : []),
       textContainer(AUTHOR_ID, AUTHOR_NAME, 72, AUTHOR_Y, 492, 58, 2, sections.author),
       textContainer(
         BODY_ID,
@@ -566,36 +572,27 @@ async function startGlasses(): Promise<void> {
         sections.body,
         menuOpen ? 0 : 1,
       ),
-      ...METRIC_LAYOUT.map((metric, index) =>
-        textContainer(
+      ...METRIC_FOOTER_LAYOUT.map((layout, index) => {
+        const metric = METRIC_TEXT[layout.kind]
+        return textContainer(
           metric.countID,
           metric.countName,
-          metric.countX,
-          metricY - 4,
-          metric.countWidth,
-          METRIC_COUNT_HEIGHT,
+          layout.countX,
+          layout.countY,
+          layout.countWidth,
+          layout.countHeight,
           7 + index,
-          sections.metricCounts[metric.kind],
-        ),
-      ),
+          centreMetricCount(sections.metricCounts[layout.kind], layout.countWidth),
+        )
+      }),
     ]
-    const post = state.posts[state.index]
-    const menuItems =
-      menuOpen && post
-        ? [
-            ...(menuError ? [menuError.slice(0, 64)] : []),
-            ...reactionMenuItems(post).map((item) =>
-              item === 'Open thread' && state.mode === 'thread' ? 'Close thread' : item,
-            ),
-          ]
-        : []
     return {
       pageKind: 'reader' as const,
       textObject,
       imageObject: [
         avatarContainer(),
         ...(hasPostImage ? [postImageContainer()] : []),
-        metricStripContainer(metricY),
+        metricStripContainer(),
         ...(menuItems.length > 0 ? [actionMenuBackground()] : []),
       ],
       listObject: menuItems.length > 0 ? [actionMenu(menuItems)] : [],
