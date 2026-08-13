@@ -25,6 +25,7 @@ import {
 } from './app-navigation.js'
 import { canvasPngBytes } from './image-bytes.js'
 import { classifyInput, type InputAction } from './input.js'
+import { LatestRenderEpoch, renderLatestImage } from './latest-image.js'
 import {
   METRIC_ICON_SIZE,
   METRIC_STRIP_WIDTH,
@@ -114,7 +115,8 @@ const METRIC_LAYOUT: readonly MetricLayout[] = [
 let state: ReaderState = initialReaderState()
 let appLayer: AppLayer = 'view-select'
 let bodyPage = 0
-let updateGlasses: (() => Promise<void>) | undefined
+let updateGlasses: ((epoch: number) => Promise<void>) | undefined
+const latestRenderEpoch = new LatestRenderEpoch()
 let stateRevision = 0
 let menuOpen = false
 let menuError: string | null = null
@@ -164,8 +166,9 @@ function updatePhone(): void {
 }
 
 async function render(): Promise<void> {
+  const epoch = latestRenderEpoch.issue()
   updatePhone()
-  await updateGlasses?.()
+  await updateGlasses?.(epoch)
 }
 
 async function loadCurrentFeed(): Promise<void> {
@@ -385,6 +388,11 @@ async function startGlasses(): Promise<void> {
   let renderedMetricSignature = ''
   let renderedPageKind: AppLayer = 'view-select'
   let bridgeQueue = Promise.resolve()
+
+  interface AvatarData {
+    bytes: Uint8Array
+    matchesUrl: boolean
+  }
 
   const textContainer = (
     containerID: number,
@@ -621,8 +629,8 @@ async function startGlasses(): Promise<void> {
     }
   }
 
-  const avatarData = async (url: string | null): Promise<Uint8Array> => {
-    if (!url) return fallbackAvatar()
+  const avatarData = async (url: string | null): Promise<AvatarData> => {
+    if (!url) return { bytes: fallbackAvatar(), matchesUrl: true }
     let pending = avatarCache.get(url)
     if (!pending) {
       pending = loadAvatarImage(url)
@@ -630,28 +638,41 @@ async function startGlasses(): Promise<void> {
       if (avatarCache.size > 64) avatarCache.delete(avatarCache.keys().next().value ?? '')
     }
     try {
-      return await pending
+      return { bytes: await pending, matchesUrl: true }
     } catch (error) {
       avatarCache.delete(url)
       console.warn('Unable to load avatar', error)
-      return fallbackAvatar()
+      return { bytes: fallbackAvatar(), matchesUrl: false }
     }
   }
 
-  const updateAvatar = async (url: string | null, force = false): Promise<void> => {
+  const updateAvatar = async (url: string | null, force: boolean, epoch: number): Promise<void> => {
+    if (force) renderedAvatarUrl = undefined
     if (!force && renderedAvatarUrl === url) return
-    const result = await bridge.updateImageRawData(
-      new ImageRawDataUpdate({
-        containerID: AVATAR_ID,
-        containerName: AVATAR_NAME,
-        imageData: await avatarData(url),
-      }),
-    )
-    if (result !== ImageRawDataUpdateResult.success) {
-      console.warn(`Avatar update failed: ${result}`)
+    const outcome = await renderLatestImage({
+      load: () => avatarData(url),
+      isCurrent: () => latestRenderEpoch.isCurrent(epoch) && appLayer === 'reader',
+      draw: async (avatar) => {
+        const result = await bridge.updateImageRawData(
+          new ImageRawDataUpdate({
+            containerID: AVATAR_ID,
+            containerName: AVATAR_NAME,
+            imageData: avatar.bytes,
+          }),
+        )
+        if (result !== ImageRawDataUpdateResult.success) {
+          console.warn(`Avatar update failed: ${result}`)
+          return false
+        }
+        return true
+      },
+    })
+    if (outcome.status !== 'rendered') {
+      renderedAvatarUrl = undefined
       return
     }
-    renderedAvatarUrl = url
+    // A fallback for a transient fetch failure is not proof that this URL rendered.
+    renderedAvatarUrl = outcome.value.matchesUrl ? url : undefined
   }
 
   const updateMetricStrip = async (force = false): Promise<void> => {
@@ -725,9 +746,12 @@ async function startGlasses(): Promise<void> {
   const refreshPageImages = async (
     sections: ReturnType<typeof renderGlassesSections>,
     force: boolean,
+    epoch: number,
   ): Promise<void> => {
-    await updateAvatar(sections.avatarUrl, force)
+    await updateAvatar(sections.avatarUrl, force, epoch)
+    if (!latestRenderEpoch.isCurrent(epoch)) return
     await updateMetricStrip(force)
+    if (!latestRenderEpoch.isCurrent(epoch)) return
     if (sections.postImageUrl && sections.postImageKind) {
       await updatePostImage(sections.postImageUrl, sections.postImageKind, force)
     } else renderedPostImageKey = null
@@ -753,9 +777,13 @@ async function startGlasses(): Promise<void> {
   renderedHasPostImage = initialPage.hasPostImage
   renderedMenuSignature = initialPage.menuSignature
   renderedPageKind = initialPage.pageKind
-  if (initialPage.pageKind === 'reader') await refreshPageImages(initial, true)
+  if (initialPage.pageKind === 'reader') {
+    const epoch = latestRenderEpoch.issue()
+    await refreshPageImages(initial, true, epoch)
+  }
 
-  const draw = async (): Promise<void> => {
+  const draw = async (epoch: number): Promise<void> => {
+    if (!latestRenderEpoch.isCurrent(epoch)) return
     const sections = renderGlassesSections(state, bodyPage)
     const nextPage = page(sections)
     let needsRebuild =
@@ -798,7 +826,7 @@ async function startGlasses(): Promise<void> {
       renderedMenuSignature = nextPage.menuSignature
       renderedPageKind = nextPage.pageKind
       if (nextPage.pageKind === 'reader') {
-        await refreshPageImages(sections, true)
+        await refreshPageImages(sections, true, epoch)
       } else {
         renderedAvatarUrl = undefined
         renderedPostImageKey = undefined
@@ -807,15 +835,17 @@ async function startGlasses(): Promise<void> {
       return
     }
     if (nextPage.pageKind === 'reader') {
-      await updateAvatar(sections.avatarUrl)
+      await updateAvatar(sections.avatarUrl, false, epoch)
+      if (!latestRenderEpoch.isCurrent(epoch)) return
       await updateMetricStrip()
+      if (!latestRenderEpoch.isCurrent(epoch)) return
       if (sections.postImageUrl && sections.postImageKind) {
         await updatePostImage(sections.postImageUrl, sections.postImageKind)
       }
     }
   }
-  updateGlasses = () => {
-    const task = bridgeQueue.then(draw)
+  updateGlasses = (epoch) => {
+    const task = bridgeQueue.then(() => draw(epoch))
     bridgeQueue = task.catch((error: unknown) => console.error(error))
     return task
   }
