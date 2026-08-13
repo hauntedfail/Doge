@@ -55,6 +55,21 @@ const snapshotSchema = z.object({
   returnTo: returnContextSchema.nullable().optional(),
 })
 
+function newestFirst(posts: Post[]): Post[] {
+  return posts
+    .map((post, sourceIndex) => ({ post, sourceIndex, timestamp: Date.parse(post.createdAt) }))
+    .sort((left, right) => {
+      const leftTimestamp = Number.isFinite(left.timestamp)
+        ? left.timestamp
+        : Number.NEGATIVE_INFINITY
+      const rightTimestamp = Number.isFinite(right.timestamp)
+        ? right.timestamp
+        : Number.NEGATIVE_INFINITY
+      return rightTimestamp - leftTimestamp || left.sourceIndex - right.sourceIndex
+    })
+    .map(({ post }) => post)
+}
+
 export function initialReaderState(): ReaderState {
   return {
     feed: 'home',
@@ -111,7 +126,7 @@ export function reduceReaderState(state: ReaderState, action: ReaderAction): Rea
     case 'timeline-loaded':
       return {
         ...state,
-        posts: [...action.posts],
+        posts: newestFirst(action.posts),
         index: 0,
         nextCursor: action.nextCursor,
         mode: 'timeline',
@@ -122,7 +137,7 @@ export function reduceReaderState(state: ReaderState, action: ReaderAction): Rea
     case 'timeline-appended':
       return {
         ...state,
-        posts: [...state.posts, ...action.posts],
+        posts: newestFirst([...state.posts, ...action.posts]),
         nextCursor: action.nextCursor,
         status: 'ready',
         error: null,

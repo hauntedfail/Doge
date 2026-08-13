@@ -42,6 +42,26 @@ describe('reader state', () => {
     expect(selected).toEqual({ ...initialReaderState(), feed: 'bookmarks' })
   })
 
+  it('orders refreshed timeline posts newest first', () => {
+    const refreshed = reduceReaderState(initialReaderState(), {
+      type: 'timeline-loaded',
+      posts: [
+        { ...posts[0]!, id: 'older', createdAt: '2026-08-12T00:00:00.000Z' },
+        { ...posts[1]!, id: 'newest', createdAt: '2026-08-14T00:00:00.000Z' },
+        { ...posts[0]!, id: 'middle', createdAt: '2026-08-13T00:00:00.000Z' },
+      ],
+      nextCursor: null,
+    })
+    expect(refreshed.posts.map((post) => post.id)).toEqual(['newest', 'middle', 'older'])
+
+    const appended = reduceReaderState(refreshed, {
+      type: 'timeline-appended',
+      posts: [{ ...posts[0]!, id: 'latest', createdAt: '2026-08-15T00:00:00.000Z' }],
+      nextCursor: null,
+    })
+    expect(appended.posts.map((post) => post.id)).toEqual(['latest', 'newest', 'middle', 'older'])
+  })
+
   it('restores only validated serialisable snapshot fields', () => {
     const restored = restoreReaderSnapshot(initialReaderState(), {
       feed: 'bookmarks',

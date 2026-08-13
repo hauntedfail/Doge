@@ -38,6 +38,7 @@ describe('reaction menu', () => {
       'Unlike',
       'Repost',
       'Remove bookmark',
+      'Reload',
       'Open thread',
       'Close',
     ])
@@ -47,9 +48,10 @@ describe('reaction menu', () => {
     expect(reactionSelection(post, 0)).toEqual({ reaction: 'like', active: false })
     expect(reactionSelection(post, 1)).toEqual({ reaction: 'repost', active: true })
     expect(reactionSelection(post, 2)).toEqual({ reaction: 'bookmark', active: false })
-    expect(reactionSelection(post, 3)).toBe('thread')
-    expect(reactionSelection(post, 4)).toBe('close')
-    expect(reactionSelection(post, 5)).toBeNull()
+    expect(reactionSelection(post, 3)).toBe('reload')
+    expect(reactionSelection(post, 4)).toBe('thread')
+    expect(reactionSelection(post, 5)).toBe('close')
+    expect(reactionSelection(post, 6)).toBeNull()
   })
 
   it('offers Gallery only when the post contains visual media', () => {
@@ -58,11 +60,13 @@ describe('reaction menu', () => {
       'Repost',
       'Remove bookmark',
       'Gallery',
+      'Reload',
       'Open thread',
       'Close',
     ])
     expect(reactionSelection(postWithImages, 3)).toBe('gallery')
-    expect(reactionSelection(postWithImages, 4)).toBe('thread')
-    expect(reactionSelection(postWithImages, 5)).toBe('close')
+    expect(reactionSelection(postWithImages, 4)).toBe('reload')
+    expect(reactionSelection(postWithImages, 5)).toBe('thread')
+    expect(reactionSelection(postWithImages, 6)).toBe('close')
   })
 })

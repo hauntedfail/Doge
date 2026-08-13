@@ -57,6 +57,7 @@ import {
   restoreReaderSnapshot,
   type ReaderState,
 } from './reader-state.js'
+import { shouldReloadTimeline } from './timeline-navigation.js'
 
 const POSITION_ID = 1
 const AUTHOR_ID = 2
@@ -267,6 +268,18 @@ async function returnFromGallery(): Promise<void> {
   await render()
 }
 
+async function reloadCurrentView(): Promise<void> {
+  stateRevision += 1
+  menuOpen = false
+  menuError = null
+  galleryImageIndex = 0
+  bodyPage = 0
+  if (state.mode !== 'timeline') {
+    state = reduceReaderState(state, { type: 'select-feed', feed: state.feed })
+  }
+  await loadCurrentFeed()
+}
+
 async function handleAction(action: InputAction): Promise<void> {
   if (!action || action === 'cleanup' || action === 'double-tap') return
   if (appLayer === 'gallery') {
@@ -316,6 +329,10 @@ async function handleAction(action: InputAction): Promise<void> {
       })
     }
     await render()
+    return
+  }
+  if (shouldReloadTimeline(action, state, bodyPage)) {
+    await reloadCurrentView()
     return
   }
   const currentSections = renderGlassesSections(state, bodyPage)
@@ -383,6 +400,10 @@ async function handleMenuSelection(index: number): Promise<void> {
     menuOpen = false
     menuError = null
     await render()
+    return
+  }
+  if (selection === 'reload') {
+    await reloadCurrentView()
     return
   }
   try {
@@ -541,7 +562,7 @@ async function startGlasses(): Promise<void> {
       borderWidth: 2,
       borderColor: 15,
       borderRadius: 6,
-      paddingLength: 4,
+      paddingLength: 0,
       containerID: ACTION_MENU_ID,
       containerName: ACTION_MENU_NAME,
       isEventCapture: 1,
