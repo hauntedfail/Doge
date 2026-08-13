@@ -1,4 +1,5 @@
 export const METRIC_ICON_SIZE = 28
+export const METRIC_STRIP_WIDTH = 288
 
 export const METRIC_ICON_KINDS = ['reply', 'repost', 'like'] as const
 
@@ -28,5 +29,27 @@ export function renderMetricIcon(kind: MetricIconKind): string {
   context.lineJoin = 'round'
   context.stroke(new Path2D(METRIC_ICON_PATHS[kind]))
   context.restore()
+  return canvas.toDataURL('image/png').split(',', 2)[1] ?? ''
+}
+
+export function renderMetricIconStrip(): string {
+  const canvas = document.createElement('canvas')
+  canvas.width = METRIC_STRIP_WIDTH
+  canvas.height = METRIC_ICON_SIZE
+  const context = canvas.getContext('2d')
+  if (!context) return ''
+
+  context.fillStyle = '#000'
+  context.fillRect(0, 0, METRIC_STRIP_WIDTH, METRIC_ICON_SIZE)
+  context.strokeStyle = '#fff'
+  context.lineWidth = 2
+  context.lineCap = 'round'
+  context.lineJoin = 'round'
+  for (const [index, kind] of METRIC_ICON_KINDS.entries()) {
+    context.save()
+    context.translate(index * 96 + 2, 2)
+    context.stroke(new Path2D(METRIC_ICON_PATHS[kind]))
+    context.restore()
+  }
   return canvas.toDataURL('image/png').split(',', 2)[1] ?? ''
 }

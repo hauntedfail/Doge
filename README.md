@@ -22,8 +22,8 @@ twitter_api_safe_relay :6900 (localhost only)
 ログイン済みX browser profile
 ```
 
-- `apps/g2` — Even Hub SDK、576×288 glasses UI、投稿者icon、iPhone companion UI
-- `apps/gateway` — Hono/Node.jsのread-only gateway、Xレスポンス正規化、avatar画像proxy
+- `apps/g2` — Even Hub SDK、576×288 glasses UI、投稿者icon・投稿画像、iPhone companion UI
+- `apps/gateway` — Hono/Node.jsのread-only gateway、Xレスポンス正規化、avatar・投稿画像proxy
 - `packages/contracts` — frontendとgatewayで共有するZod schema
 - `scripts` — relay catalog同期とproduction origin生成
 
@@ -31,11 +31,13 @@ twitter_api_safe_relay :6900 (localhost only)
 
 | 入力           | 動作                               |
 | -------------- | ---------------------------------- |
-| 上スワイプ     | 次の投稿                           |
-| 下スワイプ     | 前の投稿                           |
+| 上スワイプ     | 本文の続き / 読了後に次の投稿      |
+| 下スワイプ     | 本文の前ページ / 前の投稿          |
 | 右glassesをtap | threadを開く / 戻る / error時retry |
 | R1をtap        | Home → Following → Bookmarks       |
 | double tap     | 終了確認                           |
+
+長い本文はG2の実フォント幅に合わせてページ分割し、文字を省略しません。画像付きポストでは本文を最後まで進めたページの直下に、縦横比を維持した画像を表示します。現時点ではポスト内の最初の写真1枚を表示します。
 
 ## 必要環境
 
@@ -156,13 +158,14 @@ npm run production:start
 
 ## Security defaults
 
-- public client routeはtimeline、thread、avatar画像のread-only `GET`のみ
+- public client routeはtimeline、thread、avatar・投稿画像のread-only `GET`のみ
 - feed、cursor、post IDをschema検証
 - relay base URLはloopback HTTPのみ許可
 - relay operationはHomeTimeline、HomeLatestTimeline、Bookmarks、TweetDetailだけ
 - XのGraphQL errorをHTTP 200でも失敗として扱う
 - upstream timeout 15秒、response上限5 MB
 - avatar proxyは`pbs.twimg.com/profile_images`のHTTPS画像だけを許可し、redirect禁止、5秒timeout、512 KB上限、画像content-type必須
+- 投稿画像proxyは`pbs.twimg.com/media`のJPEG/PNG/WebPだけを許可し、redirect禁止、5秒timeout、4 MB上限、content-typeとfile signature一致を必須化
 - responseは固定DTOへ変換し、X cookieや内部headerをclientへ返さない
 - production responseは`no-store`、security headers付き
 - 本番gatewayはBearer token必須。tokenを`.ehpk`へ埋め込まず、各iPhoneで一度だけpair

@@ -12,6 +12,7 @@ const posts = ['1', '2'].map((id) => ({
   repostCount: 0,
   likeCount: 0,
   viewCount: null,
+  images: [],
 }))
 
 describe('reader state', () => {

@@ -13,6 +13,7 @@ const post = {
   repostCount: 0,
   likeCount: 1,
   viewCount: 2,
+  images: [],
 }
 
 afterEach(() => vi.unstubAllGlobals())
@@ -31,6 +32,7 @@ describe('gateway', () => {
     expect((await app.request('/api/v1/timeline?feed=likes')).status).toBe(400)
     expect((await app.request('/api/v1/posts/1/thread')).status).toBe(200)
     expect((await app.request('/api/v1/avatar')).status).toBe(400)
+    expect((await app.request('/api/v1/media')).status).toBe(400)
     expect((await app.request('/i/api/graphql/anything', { method: 'POST' })).status).toBe(404)
     expect((await app.request('/api/v1/timeline?feed=home', { method: 'POST' })).status).toBe(404)
   })
@@ -204,6 +206,80 @@ describe('gateway', () => {
     expect(
       (
         await app.request(`/api/v1/avatar?url=${url}`, {
+          headers: { authorization: 'Bearer secret' },
+        })
+      ).status,
+    ).toBe(502)
+  })
+
+  it('proxies only bounded post media from pbs.twimg.com', async () => {
+    const image = new Uint8Array([0xff, 0xd8, 0xff, 0xd9])
+    const upstream = vi.fn(
+      async () =>
+        new Response(image, {
+          status: 200,
+          headers: { 'content-length': String(image.byteLength), 'content-type': 'image/jpeg' },
+        }),
+    )
+    vi.stubGlobal('fetch', upstream)
+    const app = createApp({ source: source(), bearerToken: 'secret', allowedOrigins: [] })
+    const mediaUrl = 'https://pbs.twimg.com/media/Example123?format=jpg&name=small'
+    const response = await app.request(`/api/v1/media?url=${encodeURIComponent(mediaUrl)}`, {
+      headers: { authorization: 'Bearer secret' },
+    })
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('content-type')).toBe('image/jpeg')
+    expect(new Uint8Array(await response.arrayBuffer())).toEqual(image)
+    expect(upstream).toHaveBeenCalledWith(
+      new URL(mediaUrl),
+      expect.objectContaining({ redirect: 'manual' }),
+    )
+  })
+
+  it('rejects arbitrary media hosts, redirects, and oversized images', async () => {
+    const app = createApp({ source: source(), bearerToken: 'secret', allowedOrigins: [] })
+    const unsafe = encodeURIComponent('http://127.0.0.1:6900/health')
+    const upstream = vi.fn()
+    vi.stubGlobal('fetch', upstream)
+    expect(
+      (
+        await app.request(`/api/v1/media?url=${unsafe}`, {
+          headers: { authorization: 'Bearer secret' },
+        })
+      ).status,
+    ).toBe(400)
+    expect(upstream).not.toHaveBeenCalled()
+
+    const safe = encodeURIComponent('https://pbs.twimg.com/media/Example123?format=jpg&name=small')
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(null, { status: 302, headers: { location: unsafe } })),
+    )
+    expect(
+      (
+        await app.request(`/api/v1/media?url=${safe}`, {
+          headers: { authorization: 'Bearer secret' },
+        })
+      ).status,
+    ).toBe(502)
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(new Uint8Array([0]), {
+            status: 200,
+            headers: {
+              'content-length': String(4 * 1024 * 1024 + 1),
+              'content-type': 'image/jpeg',
+            },
+          }),
+      ),
+    )
+    expect(
+      (
+        await app.request(`/api/v1/media?url=${safe}`, {
           headers: { authorization: 'Bearer secret' },
         })
       ).status,

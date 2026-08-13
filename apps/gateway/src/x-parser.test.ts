@@ -35,6 +35,22 @@ const raw = {
                             reply_count: 3,
                             retweet_count: 5,
                             favorite_count: 8,
+                            extended_entities: {
+                              media: [
+                                {
+                                  type: 'photo',
+                                  media_url_https:
+                                    'https://pbs.twimg.com/media/Example123?format=jpg&name=large',
+                                  original_info: { width: 1200, height: 800 },
+                                },
+                                {
+                                  type: 'video',
+                                  media_url_https:
+                                    'https://pbs.twimg.com/media/Video123?format=jpg&name=large',
+                                  original_info: { width: 1920, height: 1080 },
+                                },
+                              ],
+                            },
                           },
                           note_tweet: {
                             note_tweet_results: { result: { text: 'long-form text wins' } },
@@ -97,6 +113,13 @@ describe('parseTimeline', () => {
           repostCount: 5,
           likeCount: 8,
           viewCount: 13,
+          images: [
+            {
+              url: 'https://pbs.twimg.com/media/Example123?format=jpg&name=small',
+              width: 1200,
+              height: 800,
+            },
+          ],
         },
       ],
       nextCursor: 'next-page',
@@ -140,6 +163,17 @@ describe('parseTimeline', () => {
     user.avatar.image_url = 'http://127.0.0.1:6900/health'
 
     expect(parseTimeline(unsafe, 'home').posts[0]?.authorAvatarUrl).toBeNull()
+  })
+
+  it('drops post media URLs outside the fixed Twitter image origin', () => {
+    const unsafe = structuredClone(raw)
+    const media =
+      unsafe.data.home.timeline.instructions[0]?.entries[0]?.content?.itemContent?.tweet_results
+        ?.result?.tweet.legacy.extended_entities.media[0]
+    if (!media) throw new Error('test fixture is missing its media')
+    media.media_url_https = 'http://127.0.0.1:6900/health'
+
+    expect(parseTimeline(unsafe, 'home').posts[0]?.images).toEqual([])
   })
 })
 

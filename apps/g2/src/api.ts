@@ -44,6 +44,18 @@ export async function loadAvatarImage(url: string): Promise<ArrayBuffer> {
   return response.arrayBuffer()
 }
 
+export async function loadPostImage(url: string): Promise<Blob> {
+  const query = new URLSearchParams({ url })
+  const response = await fetch(`${apiBase()}/api/v1/media?${query}`, {
+    method: 'GET',
+    credentials: 'omit',
+    headers: authorisedHeaders('image/jpeg,image/png,image/webp'),
+  })
+  if (response.status === 401) throw new Error('Access key required on this iPhone')
+  if (!response.ok) throw new Error(`Media gateway returned HTTP ${response.status}`)
+  return response.blob()
+}
+
 export async function loadTimeline(feed: Feed, cursor?: string): Promise<TimelinePage> {
   const query = new URLSearchParams({ feed })
   if (cursor) query.set('cursor', cursor)

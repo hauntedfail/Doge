@@ -1,5 +1,6 @@
 import type { Feed, Post, Thread, TimelinePage } from '@even-g2-x-reader/contracts'
 import { parseAvatarUrl } from './avatar.js'
+import { parseMediaUrl } from './media.js'
 
 type JsonObject = Record<string, unknown>
 
@@ -38,6 +39,34 @@ function countAt(object: JsonObject | undefined, key: string): number {
   return 0
 }
 
+function positiveIntegerAt(object: JsonObject | undefined, key: string): number | null {
+  const value = object?.[key]
+  return typeof value === 'number' && Number.isInteger(value) && value > 0 && value <= 32_768
+    ? value
+    : null
+}
+
+function imagesAt(legacy: JsonObject): Post['images'] {
+  const media = objectAt(legacy, 'extended_entities')?.media
+  if (!Array.isArray(media)) return []
+  const images: Post['images'] = []
+  const seen = new Set<string>()
+  for (const item of media) {
+    if (!isObject(item) || item.type !== 'photo') continue
+    const url = parseMediaUrl(stringAt(item, 'media_url_https'))
+    if (!url || seen.has(url.href)) continue
+    const original = objectAt(item, 'original_info')
+    seen.add(url.href)
+    images.push({
+      url: url.href,
+      width: positiveIntegerAt(original, 'width'),
+      height: positiveIntegerAt(original, 'height'),
+    })
+    if (images.length === 4) break
+  }
+  return images
+}
+
 function normaliseDate(value: string | undefined): string {
   if (!value) return ''
   const date = new Date(value)
@@ -72,6 +101,7 @@ function postFromObject(candidate: JsonObject): Post | undefined {
     repostCount: countAt(legacy, 'retweet_count'),
     likeCount: countAt(legacy, 'favorite_count'),
     viewCount: views?.count === undefined ? null : countAt(views, 'count'),
+    images: imagesAt(legacy),
   }
 }
 

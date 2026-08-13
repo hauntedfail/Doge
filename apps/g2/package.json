@@ -14,6 +14,7 @@
   "dependencies": {
     "@even-g2-x-reader/contracts": "0.1.0",
     "@evenrealities/even_hub_sdk": "^0.0.13",
+    "@evenrealities/pretext": "^0.1.4",
     "zod": "^4.4.3"
   },
   "devDependencies": {

@@ -1,19 +1,21 @@
 import type { Post } from '@even-g2-x-reader/contracts'
+import { paginatePostBody } from './post-pages.js'
 import type { ReaderState } from './reader-state.js'
-
-const MAX_CONTENT = 1000
 
 export interface GlassesSections {
   header: string
   author: string
   body: string
   avatarUrl: string | null
+  postImageUrl: string | null
   metricCounts: {
     reply: string
     repost: string
     like: string
   }
   help: string
+  bodyPage: number
+  bodyPageCount: number
 }
 
 function clean(value: string): string {
@@ -39,14 +41,13 @@ function date(value: string): string {
   }).format(parsed)
 }
 
-function trimTo(value: string, max: number): string {
-  const characters = Array.from(value)
-  return characters.length <= max ? value : `${characters.slice(0, Math.max(0, max - 1)).join('')}…`
-}
-
-function postSections(post: Post, state: ReaderState): GlassesSections {
+function postSections(post: Post, state: ReaderState, requestedPage: number): GlassesSections {
   const feed = state.mode === 'thread' ? 'THREAD' : state.feed.toUpperCase()
-  const header = `DOGE / ${feed}    ${state.index + 1}/${state.posts.length}`
+  const pages = paginatePostBody(clean(post.text), post.images.length > 0)
+  const bodyPage = Math.min(Math.max(0, requestedPage), pages.length - 1)
+  const displayPage = pages[bodyPage] ?? { body: '', showsImage: false }
+  const pageMarker = pages.length > 1 ? ` · ${bodyPage + 1}/${pages.length}` : ''
+  const header = `DOGE / ${feed}    ${state.index + 1}/${state.posts.length}${pageMarker}`
   const author =
     `${clean(post.authorName)}\n@${clean(post.authorHandle)}  ${date(post.createdAt)}`.trim()
   const help =
@@ -56,26 +57,32 @@ function postSections(post: Post, state: ReaderState): GlassesSections {
   return {
     header,
     author,
-    body: trimTo(clean(post.text), MAX_CONTENT),
+    body: displayPage.body,
     avatarUrl: post.authorAvatarUrl,
+    postImageUrl: displayPage.showsImage ? (post.images[0]?.url ?? null) : null,
     metricCounts: {
       reply: compact(post.replyCount),
       repost: compact(post.repostCount),
       like: compact(post.likeCount),
     },
-    help,
+    help: bodyPage < pages.length - 1 ? 'UP more  DOWN back  DOUBLE exit' : help,
+    bodyPage,
+    bodyPageCount: pages.length,
   }
 }
 
-export function renderGlassesSections(state: ReaderState): GlassesSections {
+export function renderGlassesSections(state: ReaderState, bodyPage = 0): GlassesSections {
   if (state.status === 'error') {
     return {
       header: `DOGE / ${state.feed.toUpperCase()}`,
       author: '',
       body: `Unable to load the timeline.\n${clean(state.error ?? 'Unknown error')}\n\nTAP retry  R1 switch feed  DOUBLE exit`,
       avatarUrl: null,
+      postImageUrl: null,
       metricCounts: { reply: '', repost: '', like: '' },
       help: '',
+      bodyPage: 0,
+      bodyPageCount: 1,
     }
   }
   if (state.status === 'loading' && state.posts.length === 0) {
@@ -84,35 +91,38 @@ export function renderGlassesSections(state: ReaderState): GlassesSections {
       author: '',
       body: 'Loading…\n\nR1 switch feed  DOUBLE exit',
       avatarUrl: null,
+      postImageUrl: null,
       metricCounts: { reply: '', repost: '', like: '' },
       help: '',
+      bodyPage: 0,
+      bodyPageCount: 1,
     }
   }
   const post = state.posts[state.index]
   return post
-    ? postSections(post, state)
+    ? postSections(post, state, bodyPage)
     : {
         header: `DOGE / ${state.feed.toUpperCase()}`,
         author: '',
         body: 'No posts found.\n\nR1 switch feed  DOUBLE exit',
         avatarUrl: null,
+        postImageUrl: null,
         metricCounts: { reply: '', repost: '', like: '' },
         help: '',
+        bodyPage: 0,
+        bodyPageCount: 1,
       }
 }
 
 export function renderGlassesText(state: ReaderState): string {
   const sections = renderGlassesSections(state)
-  return trimTo(
-    [
-      sections.header,
-      sections.author,
-      sections.body,
-      ...Object.values(sections.metricCounts),
-      sections.help,
-    ]
-      .filter(Boolean)
-      .join('\n'),
-    MAX_CONTENT,
-  )
+  return [
+    sections.header,
+    sections.author,
+    sections.body,
+    ...Object.values(sections.metricCounts),
+    sections.help,
+  ]
+    .filter(Boolean)
+    .join('\n')
 }

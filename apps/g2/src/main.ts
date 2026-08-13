@@ -11,16 +11,22 @@ import {
   waitForEvenAppBridge,
   type EvenHubEvent,
 } from '@evenrealities/even_hub_sdk'
-import { loadAvatarImage, loadThread, loadTimeline } from './api.js'
+import { loadAvatarImage, loadPostImage, loadThread, loadTimeline } from './api.js'
 import { browserAccessToken, clearBrowserAccessToken, saveBrowserAccessToken } from './auth.js'
 import { registerBackgroundState } from './background-state.js'
 import { classifyInput, type InputAction } from './input.js'
 import {
-  METRIC_ICON_KINDS,
   METRIC_ICON_SIZE,
-  renderMetricIcon,
+  METRIC_STRIP_WIDTH,
+  renderMetricIconStrip,
   type MetricIconKind,
 } from './metric-icons.js'
+import {
+  POST_IMAGE_HEIGHT,
+  POST_IMAGE_WIDTH,
+  renderPostImage,
+  renderPostImagePlaceholder,
+} from './post-image.js'
 import { renderGlassesSections } from './presentation.js'
 import {
   initialReaderState,
@@ -38,9 +44,8 @@ const REPLY_COUNT_ID = 5
 const REPOST_COUNT_ID = 6
 const LIKE_COUNT_ID = 7
 const HELP_ID = 8
-const REPLY_ICON_ID = 9
-const REPOST_ICON_ID = 10
-const LIKE_ICON_ID = 11
+const METRIC_STRIP_ID = 9
+const POST_IMAGE_ID = 10
 const HEADER_NAME = 'doge_header'
 const AUTHOR_NAME = 'doge_author'
 const BODY_NAME = 'doge_body'
@@ -49,62 +54,48 @@ const REPLY_COUNT_NAME = 'doge_reply_num'
 const REPOST_COUNT_NAME = 'doge_rp_num'
 const LIKE_COUNT_NAME = 'doge_like_num'
 const HELP_NAME = 'doge_help'
-const REPLY_ICON_NAME = 'doge_reply_icon'
-const REPOST_ICON_NAME = 'doge_rp_icon'
-const LIKE_ICON_NAME = 'doge_like_icon'
+const METRIC_STRIP_NAME = 'doge_metrics'
+const POST_IMAGE_NAME = 'doge_post_img'
 const AVATAR_SIZE = 48
-const METRIC_Y = 220
-const METRIC_COUNT_Y = 216
-const METRIC_COUNT_HEIGHT = 36
+const PLAIN_METRIC_Y = 220
+const MEDIA_METRIC_Y = 258
+const METRIC_COUNT_HEIGHT = 30
+const POST_IMAGE_X = 144
+const POST_IMAGE_Y = 156
 
 interface MetricLayout {
   kind: MetricIconKind
-  iconID: number
-  iconName: string
-  iconX: number
   countID: number
   countName: string
   countX: number
   countWidth: number
-  zOrderIndex: number
 }
 
 const METRIC_LAYOUT: readonly MetricLayout[] = [
   {
     kind: 'reply',
-    iconID: REPLY_ICON_ID,
-    iconName: REPLY_ICON_NAME,
-    iconX: 12,
     countID: REPLY_COUNT_ID,
     countName: REPLY_COUNT_NAME,
-    countX: 44,
-    countWidth: 142,
-    zOrderIndex: 9,
+    countX: 174,
+    countWidth: 62,
   },
   {
     kind: 'repost',
-    iconID: REPOST_ICON_ID,
-    iconName: REPOST_ICON_NAME,
-    iconX: 198,
     countID: REPOST_COUNT_ID,
     countName: REPOST_COUNT_NAME,
-    countX: 230,
-    countWidth: 142,
-    zOrderIndex: 10,
+    countX: 270,
+    countWidth: 62,
   },
   {
     kind: 'like',
-    iconID: LIKE_ICON_ID,
-    iconName: LIKE_ICON_NAME,
-    iconX: 384,
     countID: LIKE_COUNT_ID,
     countName: LIKE_COUNT_NAME,
-    countX: 416,
-    countWidth: 148,
-    zOrderIndex: 11,
+    countX: 366,
+    countWidth: 62,
   },
 ]
 let state: ReaderState = initialReaderState()
+let bodyPage = 0
 let updateGlasses: (() => Promise<void>) | undefined
 let stateRevision = 0
 
@@ -147,6 +138,7 @@ async function render(): Promise<void> {
 async function loadCurrentFeed(): Promise<void> {
   const revision = stateRevision
   const feed = state.feed
+  bodyPage = 0
   state = reduceReaderState(state, { type: 'timeline-loading' })
   await render()
   try {
@@ -170,6 +162,7 @@ async function loadCurrentFeed(): Promise<void> {
 async function handleAction(action: InputAction): Promise<void> {
   if (!action || action === 'cleanup' || action === 'exit') return
   if (action === 'cycle-feed') {
+    bodyPage = 0
     state = reduceReaderState(state, { type: 'cycle-feed' })
     await loadCurrentFeed()
     return
@@ -181,6 +174,7 @@ async function handleAction(action: InputAction): Promise<void> {
     }
     if (state.mode === 'thread') {
       state = reduceReaderState(state, { type: 'close-thread' })
+      bodyPage = 0
       await render()
       return
     }
@@ -191,12 +185,24 @@ async function handleAction(action: InputAction): Promise<void> {
     try {
       const thread = await loadThread(current.id)
       state = reduceReaderState(state, { type: 'thread-loaded', posts: thread.posts })
+      bodyPage = 0
     } catch (error) {
       state = reduceReaderState(state, {
         type: 'error',
         message: error instanceof Error ? error.message : 'Unknown error',
       })
     }
+    await render()
+    return
+  }
+  const currentSections = renderGlassesSections(state, bodyPage)
+  if (action === 'next' && bodyPage < currentSections.bodyPageCount - 1) {
+    bodyPage += 1
+    await render()
+    return
+  }
+  if (action === 'previous' && bodyPage > 0) {
+    bodyPage -= 1
     await render()
     return
   }
@@ -220,7 +226,11 @@ async function handleAction(action: InputAction): Promise<void> {
       })
     }
   }
+  const previousIndex = state.index
   state = reduceReaderState(state, { type: action })
+  if (state.index !== previousIndex) {
+    bodyPage = action === 'previous' ? renderGlassesSections(state).bodyPageCount - 1 : 0
+  }
   await render()
 }
 
@@ -230,6 +240,7 @@ registerBackgroundState(
   (saved) => {
     stateRevision += 1
     state = restoreReaderSnapshot(state, saved)
+    bodyPage = 0
     void render()
   },
 )
@@ -250,12 +261,14 @@ element('pairing')?.addEventListener('submit', (event) => {
   if (message) message.textContent = 'This iPhone is paired with Doge.'
   stateRevision += 1
   state = initialReaderState()
+  bodyPage = 0
   void loadCurrentFeed()
 })
 element('forget-device')?.addEventListener('click', () => {
   clearBrowserAccessToken()
   stateRevision += 1
   state = { ...initialReaderState(), status: 'error', error: 'Access key required on this iPhone' }
+  bodyPage = 0
   void render()
 })
 updatePhone()
@@ -264,7 +277,10 @@ async function startGlasses(): Promise<void> {
   const bridge = await waitForEvenAppBridge()
   const renderedLengths = new Map<number, number>()
   const avatarCache = new Map<string, Promise<ArrayBuffer>>()
+  const postImageCache = new Map<string, Promise<string>>()
   let renderedAvatarUrl: string | null | undefined
+  let renderedPostImageUrl: string | null | undefined
+  let renderedHasPostImage = false
   let bridgeQueue = Promise.resolve()
 
   const textContainer = (
@@ -302,42 +318,62 @@ async function startGlasses(): Promise<void> {
       height: AVATAR_SIZE,
       containerID: AVATAR_ID,
       containerName: AVATAR_NAME,
-      zOrderIndex: 8,
+      zOrderIndex: 4,
     })
 
-  const metricIconContainer = (metric: MetricLayout) =>
+  const metricStripContainer = (yPosition: number) =>
     new ImageContainerProperty({
-      xPosition: metric.iconX,
-      yPosition: METRIC_Y,
-      width: METRIC_ICON_SIZE,
+      xPosition: POST_IMAGE_X,
+      yPosition,
+      width: METRIC_STRIP_WIDTH,
       height: METRIC_ICON_SIZE,
-      containerID: metric.iconID,
-      containerName: metric.iconName,
-      zOrderIndex: metric.zOrderIndex,
+      containerID: METRIC_STRIP_ID,
+      containerName: METRIC_STRIP_NAME,
+      zOrderIndex: 6,
+    })
+
+  const postImageContainer = () =>
+    new ImageContainerProperty({
+      xPosition: POST_IMAGE_X,
+      yPosition: POST_IMAGE_Y,
+      width: POST_IMAGE_WIDTH,
+      height: POST_IMAGE_HEIGHT,
+      containerID: POST_IMAGE_ID,
+      containerName: POST_IMAGE_NAME,
+      zOrderIndex: 5,
     })
 
   const page = (sections: ReturnType<typeof renderGlassesSections>) => {
+    const hasPostImage = sections.postImageUrl !== null
+    const metricY = hasPostImage ? MEDIA_METRIC_Y : PLAIN_METRIC_Y
     const textObject = [
       textContainer(HEADER_ID, HEADER_NAME, 8, 4, 560, 28, 1, sections.header),
       textContainer(AUTHOR_ID, AUTHOR_NAME, 72, 36, 492, 58, 2, sections.author),
-      textContainer(BODY_ID, BODY_NAME, 8, 100, 560, 112, 3, sections.body, 1),
+      textContainer(BODY_ID, BODY_NAME, 8, 100, 560, hasPostImage ? 52 : 112, 3, sections.body, 1),
       ...METRIC_LAYOUT.map((metric, index) =>
         textContainer(
           metric.countID,
           metric.countName,
           metric.countX,
-          METRIC_COUNT_Y,
+          metricY - 4,
           metric.countWidth,
           METRIC_COUNT_HEIGHT,
-          4 + index,
+          7 + index,
           sections.metricCounts[metric.kind],
         ),
       ),
-      textContainer(HELP_ID, HELP_NAME, 8, 252, 560, 36, 7, sections.help),
     ]
+    if (!hasPostImage) {
+      textObject.push(textContainer(HELP_ID, HELP_NAME, 8, 252, 560, 36, 10, sections.help))
+    }
     return {
       textObject,
-      imageObject: [avatarContainer(), ...METRIC_LAYOUT.map(metricIconContainer)],
+      imageObject: [
+        avatarContainer(),
+        ...(hasPostImage ? [postImageContainer()] : []),
+        metricStripContainer(metricY),
+      ],
+      hasPostImage,
     }
   }
 
@@ -396,79 +432,123 @@ async function startGlasses(): Promise<void> {
     renderedAvatarUrl = url
   }
 
-  const metricIconData = new Map(
-    METRIC_ICON_KINDS.map((kind) => [kind, renderMetricIcon(kind)] as const),
-  )
-  const updateMetricIcons = async (): Promise<void> => {
-    for (const metric of METRIC_LAYOUT) {
-      const result = await bridge.updateImageRawData(
-        new ImageRawDataUpdate({
-          containerID: metric.iconID,
-          containerName: metric.iconName,
-          imageData: metricIconData.get(metric.kind) ?? '',
-        }),
-      )
-      if (result !== ImageRawDataUpdateResult.success)
-        console.warn(`${metric.kind} icon update failed: ${result}`)
+  const updateMetricStrip = async (): Promise<void> => {
+    const result = await bridge.updateImageRawData(
+      new ImageRawDataUpdate({
+        containerID: METRIC_STRIP_ID,
+        containerName: METRIC_STRIP_NAME,
+        imageData: renderMetricIconStrip(),
+      }),
+    )
+    if (result !== ImageRawDataUpdateResult.success) {
+      console.warn(`Metric icon update failed: ${result}`)
     }
   }
 
-  const initial = renderGlassesSections(state)
+  const postImageData = async (url: string): Promise<string> => {
+    let pending = postImageCache.get(url)
+    if (!pending) {
+      pending = loadPostImage(url).then(renderPostImage)
+      postImageCache.set(url, pending)
+      if (postImageCache.size > 32) postImageCache.delete(postImageCache.keys().next().value ?? '')
+    }
+    try {
+      return await pending
+    } catch (error) {
+      postImageCache.delete(url)
+      console.warn('Unable to load post image', error)
+      return renderPostImagePlaceholder()
+    }
+  }
+
+  const updatePostImage = async (url: string, force = false): Promise<void> => {
+    if (!force && renderedPostImageUrl === url) return
+    const result = await bridge.updateImageRawData(
+      new ImageRawDataUpdate({
+        containerID: POST_IMAGE_ID,
+        containerName: POST_IMAGE_NAME,
+        imageData: await postImageData(url),
+      }),
+    )
+    if (result !== ImageRawDataUpdateResult.success) {
+      console.warn(`Post image update failed: ${result}`)
+      return
+    }
+    renderedPostImageUrl = url
+  }
+
+  const rememberTextLengths = (textObject: TextContainerProperty[]): void => {
+    renderedLengths.clear()
+    for (const text of textObject) {
+      renderedLengths.set(text.containerID ?? 0, text.content?.length ?? 0)
+    }
+  }
+
+  const refreshPageImages = async (
+    sections: ReturnType<typeof renderGlassesSections>,
+    force: boolean,
+  ): Promise<void> => {
+    await updateAvatar(sections.avatarUrl, force)
+    await updateMetricStrip()
+    if (sections.postImageUrl) await updatePostImage(sections.postImageUrl, force)
+    else renderedPostImageUrl = null
+  }
+
+  const initial = renderGlassesSections(state, bodyPage)
   const initialPage = page(initial)
   const result = await bridge.createStartUpPageContainer(
     new CreateStartUpPageContainer({
-      containerTotalNum: 11,
+      containerTotalNum: initialPage.textObject.length + initialPage.imageObject.length,
       textObject: initialPage.textObject,
       imageObject: initialPage.imageObject,
     }),
   )
   if (result !== StartUpPageCreateResult.success)
     throw new Error(`Unable to create G2 page: ${result}`)
-  for (const text of initialPage.textObject) {
-    renderedLengths.set(text.containerID ?? 0, text.content?.length ?? 0)
-  }
-  await updateAvatar(initial.avatarUrl, true)
-  await updateMetricIcons()
+  rememberTextLengths(initialPage.textObject)
+  renderedHasPostImage = initialPage.hasPostImage
+  await refreshPageImages(initial, true)
 
   const draw = async (): Promise<void> => {
-    const sections = renderGlassesSections(state)
+    const sections = renderGlassesSections(state, bodyPage)
     const nextPage = page(sections)
-    let needsRebuild = false
-    for (const text of nextPage.textObject) {
-      const containerID = text.containerID ?? 0
-      const containerName = text.containerName ?? ''
-      const content = text.content ?? ''
-      const upgraded = await bridge.textContainerUpgrade(
-        new TextContainerUpgrade({
-          containerID,
-          containerName,
-          contentOffset: 0,
-          contentLength: renderedLengths.get(containerID) ?? 0,
-          content,
-        }),
-      )
-      if (!upgraded) {
-        needsRebuild = true
-        break
+    let needsRebuild = nextPage.hasPostImage !== renderedHasPostImage
+    if (!needsRebuild) {
+      for (const text of nextPage.textObject) {
+        const containerID = text.containerID ?? 0
+        const containerName = text.containerName ?? ''
+        const content = text.content ?? ''
+        const upgraded = await bridge.textContainerUpgrade(
+          new TextContainerUpgrade({
+            containerID,
+            containerName,
+            contentOffset: 0,
+            contentLength: renderedLengths.get(containerID) ?? 0,
+            content,
+          }),
+        )
+        if (!upgraded) {
+          needsRebuild = true
+          break
+        }
+        renderedLengths.set(containerID, content.length)
       }
-      renderedLengths.set(containerID, content.length)
     }
     if (needsRebuild) {
       await bridge.rebuildPageContainer(
         new RebuildPageContainer({
-          containerTotalNum: 11,
+          containerTotalNum: nextPage.textObject.length + nextPage.imageObject.length,
           textObject: nextPage.textObject,
           imageObject: nextPage.imageObject,
         }),
       )
-      for (const text of nextPage.textObject) {
-        renderedLengths.set(text.containerID ?? 0, text.content?.length ?? 0)
-      }
-      await updateAvatar(sections.avatarUrl, true)
-      await updateMetricIcons()
+      rememberTextLengths(nextPage.textObject)
+      renderedHasPostImage = nextPage.hasPostImage
+      await refreshPageImages(sections, true)
       return
     }
     await updateAvatar(sections.avatarUrl)
+    if (sections.postImageUrl) await updatePostImage(sections.postImageUrl)
   }
   updateGlasses = () => {
     const task = bridgeQueue.then(draw)

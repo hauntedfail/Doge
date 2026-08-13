@@ -4,6 +4,7 @@ import { Hono } from 'hono'
 import { secureHeaders } from 'hono/secure-headers'
 import { z } from 'zod'
 import { loadAvatar, parseAvatarUrl } from './avatar.js'
+import { loadPostMedia, parseMediaUrl } from './media.js'
 import type { TimelineSource } from './source.js'
 
 export interface AppOptions {
@@ -86,6 +87,19 @@ export function createApp(options: AppOptions): Hono {
     body.set(avatar.bytes)
     context.header('cache-control', 'private, max-age=3600')
     context.header('content-type', avatar.contentType)
+    context.header('x-content-type-options', 'nosniff')
+    return context.body(body.buffer)
+  })
+  app.get('/api/v1/media', async (context) => {
+    const url = parseMediaUrl(context.req.query('url'))
+    if (!url) {
+      return context.json({ error: { code: 'invalid_request', message: 'Invalid media URL' } }, 400)
+    }
+    const media = await loadPostMedia(url)
+    const body = new Uint8Array(media.bytes.byteLength)
+    body.set(media.bytes)
+    context.header('cache-control', 'private, max-age=3600')
+    context.header('content-type', media.contentType)
     context.header('x-content-type-options', 'nosniff')
     return context.body(body.buffer)
   })

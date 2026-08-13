@@ -15,6 +15,13 @@ describe('renderGlassesText', () => {
       repostCount: 2,
       likeCount: 3,
       viewCount: 4,
+      images: [
+        {
+          url: 'https://pbs.twimg.com/media/Example123?format=jpg&name=small',
+          width: 1200,
+          height: 800,
+        },
+      ],
     }
     const state = reduceReaderState(initialReaderState(), {
       type: 'timeline-loaded',
@@ -31,12 +38,17 @@ describe('renderGlassesText', () => {
       header: expect.stringContaining('DOGE / HOME'),
       author: expect.stringContaining('@ada'),
       avatarUrl: 'https://pbs.twimg.com/profile_images/1/ada_normal.jpg',
+      postImageUrl: null,
       metricCounts: {
         reply: '1',
         repost: '2',
         like: '3',
       },
     })
+    const finalSections = renderGlassesSections(state, sections.bodyPageCount - 1)
+    expect(finalSections.postImageUrl).toBe(
+      'https://pbs.twimg.com/media/Example123?format=jpg&name=small',
+    )
     expect(sections.body).not.toMatch(/\b(?:RE|RP|LIKE|VIEW)\b/u)
   })
 })

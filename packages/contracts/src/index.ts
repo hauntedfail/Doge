@@ -3,6 +3,13 @@ import { z } from 'zod'
 export const feedSchema = z.enum(['home', 'following', 'bookmarks'])
 export type Feed = z.infer<typeof feedSchema>
 
+export const postImageSchema = z.object({
+  url: z.url(),
+  width: z.number().int().positive().max(32_768).nullable(),
+  height: z.number().int().positive().max(32_768).nullable(),
+})
+export type PostImage = z.infer<typeof postImageSchema>
+
 export const postSchema = z.object({
   id: z.string().min(1),
   authorName: z.string().min(1),
@@ -14,6 +21,7 @@ export const postSchema = z.object({
   repostCount: z.number().int().nonnegative(),
   likeCount: z.number().int().nonnegative(),
   viewCount: z.number().int().nonnegative().nullable(),
+  images: z.array(postImageSchema).max(4).default([]),
 })
 export type Post = z.infer<typeof postSchema>
 
