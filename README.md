@@ -43,6 +43,8 @@ twitter_api_safe_relay :6900 (localhost only)
 | action menu | scroll     | Like / Repost / Bookmark / thread |
 | action menu | tap        | 選択を実行し、成功後menuを閉じる  |
 
+G2のscrollはcontentを引っ張るnatural/inverse方式ではありません。投稿viewでは、進みたい方向へ指をslideします（下方向で次の本文page／post、上方向で前の本文page／post）。view選択とaction menuはG2 native listのscrollに従います。
+
 長い本文はG2の実フォント幅に合わせてページ分割し、文字を省略しません。G2画面内には常設の操作guideを置かず、その領域も本文とview選択listに使います。画像付きポストでは本文を最後まで進めたページの直下に、縦横比を維持した画像を表示します。写真は最初の1枚、動画・animated GIFは静止posterを再生マーク付きで表示します。動画データの取得・再生は行いません。icon、投稿者画像、投稿画像はG2 bridgeへencoded PNG/JPEGのbyte列として渡します。高速にpostやviewを切り替えた場合、古いavatar取得結果は破棄し、最新renderだけをimage containerへ反映します。
 
 ## 必要環境

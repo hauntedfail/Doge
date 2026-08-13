@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { classifyInput } from './input.js'
 
 describe('classifyInput', () => {
-  it('maps text swipes to feed navigation', () => {
-    expect(classifyInput({ textEvent: { eventType: 1 } })).toBe('next')
-    expect(classifyInput({ textEvent: { eventType: 2 } })).toBe('previous')
+  it('moves in the physical slide direction used by G2', () => {
+    expect(classifyInput({ textEvent: { eventType: 1 } })).toBe('previous')
+    expect(classifyInput({ textEvent: { eventType: 2 } })).toBe('next')
   })
 
   it('opens the action menu for a single click from either input source', () => {
