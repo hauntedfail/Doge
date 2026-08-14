@@ -1,9 +1,8 @@
 # Doge icon asset
 
-`doge-icon.png` reproduces the temporary Doge/Kabosu branding used by Twitter in April 2023.
-It was obtained from [CrystalPNG](https://crystalpng.com/product/twitter-new-logo/), whose page
-labels the download as personal-use-only. The image is a separately licensed asset and is not
-covered by this repository's AGPL-3.0-only licence.
+`doge-icon.png` is an original Shiba Inu smart-glasses illustration generated for this project
+with OpenAI image generation. It does not reproduce the Kabosu photograph or Twitter/X's
+temporary Doge logo.
 
-Use it only for this private/personal Doge build. Replace it with an original or appropriately
-licensed asset before public or commercial distribution.
+To the extent the project authors hold rights in this generated asset, it is distributed under
+the repository's AGPL-3.0-only licence. No attribution to OpenAI is required.

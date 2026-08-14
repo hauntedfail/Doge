@@ -49,7 +49,7 @@ G2のscrollはcontentを引っ張るnatural/inverse方式ではありません�
 
 取得済みmediaのBlobとG2用に変換済みのPNG tileはWebView memory内のLRU cacheへ短期間保持します。同じpostやGallery画像へ戻った場合はnetwork取得・decode・再変換を省略します。ただしEven SDKには眼鏡側の画像cacheをIDで再利用するAPIがないため、page rebuild後のBLE再送自体は必要です。icon、投稿者画像、投稿画像はG2 bridgeへencoded PNG/JPEGのbyte列として順番に渡します。高速にpostやviewを切り替えた場合、古いavatar取得結果は破棄し、最新renderだけをimage containerへ反映します。
 
-`apps/g2/public/doge-icon.png` はiPhone側のweb app iconと、view選択後の初回loading画面で使います。Even Hubの掲載iconには同じファイルを手動でuploadしてください。この画像だけはAGPLの対象外で、private/personal build専用です。詳細は同directoryの `doge-icon.LICENSE.md` を参照してください。
+`apps/g2/public/doge-icon.png` はiPhone側のweb app iconと、view選択後の初回loading画面で使います。特定の写真やTwitter/Xの旧logoを複製しない、このproject用のoriginal illustrationです。Even Hubの掲載iconには同じファイルを手動でuploadしてください。詳細は同directoryの `doge-icon.LICENSE.md` を参照してください。
 
 ## 必要環境
 
@@ -146,13 +146,17 @@ Cloudflare Tunnelで公開するのはgatewayの`127.0.0.1:8787`だけです。S
 npm run production:key
 ```
 
-Even AppのDoge画面で一度だけ貼り付けて`Pair Doge`を押します。keyはそのiPhoneのWebView local storageへ保存され、`Forget access key`を押すまで再起動後も使われます。X cookieはMacから出ません。
+Even AppのDoge画面でGateway URLとkeyを入力し、`Save and test connection`を押します。認証確認に成功した設定だけをEven App SDKのdevice local storageへ保存し、次回起動時は保存済み設定で自動接続します。従来のWebView local storageにあるkeyも初回に移行します。keyを変更するときだけ新しい値を入力し、空欄なら保存済みkeyを維持します。`Forget access key`でdevice storageからも削除できます。X cookieはMacから出ません。
+
+Gateway URLはphone画面で編集できますが、Even Hubのnetwork permissionはbuild時の完全一致origin allowlistです。wildcardは使えないため、公開buildは`https://doge.h1ka.ru`だけに接続できます。別originを運用する場合は、そのoriginをmanifestへ含めた別buildを作るか、公開版の後続versionでallowlistへ追加してください。
 
 Safe Relayが起動中であることを確認して本番gatewayとnamed Tunnelを起動します。
 
 ```bash
 npm run production:start
 ```
+
+Gateway sourceを更新して`npm run build`した場合、実行中の`production:start`も再起動してください。Node processは起動時に読み込んだ`dist/server.js`を使い続けるため、buildだけではprofileなどの新routeは反映されません。
 
 外出中もMacの電源・ネット接続、Safe Relay、`production:start`を維持してください。現在の構成ではiPhoneとG2だけでXへ直接接続するわけではなく、自宅Macがbackendです。
 
@@ -166,11 +170,13 @@ npm run production:start
 4. iPhoneのEven Appで`Me → Beta tester → Doge → Install`
 5. glasses homeからDogeを起動し、phone画面でaccess keyを一度だけpair
 
+公開versionはrelease後に同じversion番号で差し替えられないため、Betaでnative settings復元、background復帰、実機profile表示を確認してから提出します。掲載iconにはrepository同梱のoriginal assetを使えます。
+
 公開審査が発生するのはStoreへsubmissionする段階です。詳細はEven Hub公式の[Beta testing](https://hub.evenrealities.com/docs/test/beta-testing)と[Private testing](https://hub.evenrealities.com/docs/test/private-testing)を参照してください。
 
 ## Security defaults
 
-- public client routeはtimeline、thread、avatar・投稿画像の`GET`と、Like、Repost、Bookmark専用の`PUT`/`DELETE`のみ
+- public client routeは認証確認、timeline、thread、profile、avatar・投稿画像の`GET`と、Like、Repost、Bookmark専用の`PUT`/`DELETE`のみ
 - feed、cursor、post IDをschema検証
 - relay base URLはloopback HTTPのみ許可
 - relay operationは4つのread操作とFavorite/Unfavorite、Create/Delete Retweet、Create/Delete Bookmarkの6つだけ
