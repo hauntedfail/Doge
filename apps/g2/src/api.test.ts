@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { loadPostImage, loadProfile, loadTimeline, type DataLoadStage } from './api.js'
+import {
+  configureApi,
+  loadPostImage,
+  loadProfile,
+  loadTimeline,
+  verifyGatewayConnection,
+  type DataLoadStage,
+} from './api.js'
 
 const storage = {
   getItem: () => null,
@@ -8,7 +15,48 @@ const storage = {
 }
 
 describe('API loading progress', () => {
-  afterEach(() => vi.unstubAllGlobals())
+  afterEach(() => {
+    configureApi(null)
+    vi.unstubAllGlobals()
+  })
+
+  it('verifies a configured gateway without fetching an X timeline', async () => {
+    const fetchMock = vi.fn(async () => Response.json({ ok: true }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      verifyGatewayConnection({
+        gatewayUrl: 'https://doge.example',
+        accessToken: 'A'.repeat(43),
+      }),
+    ).resolves.toBe(true)
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://doge.example/api/v1/session',
+      expect.objectContaining({
+        headers: expect.objectContaining({ authorization: `Bearer ${'A'.repeat(43)}` }),
+      }),
+    )
+  })
+
+  it('does not resurrect a browser token when runtime settings explicitly have no key', async () => {
+    const legacyToken = 'B'.repeat(43)
+    vi.stubGlobal('window', {
+      location: { hash: '', port: '5173', origin: 'http://127.0.0.1:5173' },
+      localStorage: { ...storage, getItem: () => legacyToken },
+      sessionStorage: storage,
+    })
+    const fetchMock = vi.fn(async (_input: string | URL | Request, _init?: RequestInit) =>
+      Response.json({ feed: 'home', posts: [], nextCursor: null }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    configureApi({ gatewayUrl: 'https://doge.example', accessToken: null })
+
+    await loadTimeline('home')
+
+    const headers = new Headers(fetchMock.mock.calls[0]?.[1]?.headers)
+    expect(headers.has('authorization')).toBe(false)
+  })
 
   it('reports response and preparation milestones in order', async () => {
     vi.stubGlobal('window', {

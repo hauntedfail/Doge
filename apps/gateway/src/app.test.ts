@@ -129,9 +129,17 @@ describe('gateway', () => {
       allowedOrigins: [],
     })
     expect((await app.request('/api/v1/timeline?feed=home')).status).toBe(401)
+    expect((await app.request('/api/v1/session')).status).toBe(401)
     expect(
       (
         await app.request('/api/v1/timeline?feed=home', {
+          headers: { authorization: 'Bearer secret' },
+        })
+      ).status,
+    ).toBe(200)
+    expect(
+      (
+        await app.request('/api/v1/session', {
           headers: { authorization: 'Bearer secret' },
         })
       ).status,

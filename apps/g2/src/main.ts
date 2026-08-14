@@ -22,6 +22,8 @@ import {
   loadThread,
   loadTimeline,
   setReaction,
+  configureApi,
+  verifyGatewayConnection,
 } from './api.js'
 import { ACTION_MENU_BACKGROUND_TILES, ACTION_MENU_BOUNDS } from './action-menu-layout.js'
 import { browserAccessToken, clearBrowserAccessToken, saveBrowserAccessToken } from './auth.js'
@@ -75,6 +77,16 @@ import { renderGlassesSections } from './presentation.js'
 import { profileSummary } from './profile-presentation.js'
 import { initialProfileState, reduceProfileState, type ProfileState } from './profile-state.js'
 import { reactionMenuItems, reactionSelection } from './reaction-menu.js'
+import {
+  browserSettingsStore,
+  loadGatewaySettings,
+  nativeSettingsStore,
+  normaliseGatewayUrl,
+  saveGatewaySettings,
+  writeGatewaySettings,
+  type GatewaySettings,
+  type SettingsStore,
+} from './settings.js'
 import {
   initialReaderState,
   readerSnapshot,
@@ -200,10 +212,30 @@ let profileState: ProfileState | null = null
 let profileBodyPage = 0
 let profileRevision = 0
 
+const defaultGatewayUrl = normaliseGatewayUrl(
+  import.meta.env.VITE_API_BASE_URL?.trim() ||
+    (window.location.port === '5173' ? 'http://127.0.0.1:8787' : window.location.origin),
+)
+const browserGatewayStore = browserSettingsStore(window.localStorage)
+let gatewayStore: SettingsStore = browserGatewayStore
+let gatewaySettings: GatewaySettings = {
+  gatewayUrl: defaultGatewayUrl,
+  accessToken: browserAccessToken(),
+}
+configureApi(gatewaySettings)
+
 type ReaderCommand = SwipeDirection | 'confirm' | 'toggle-detail'
 
 function element(id: string): HTMLElement | null {
   return document.getElementById(id)
+}
+
+function updateGatewayControls(): void {
+  const gatewayInput = element('gateway-url')
+  if (gatewayInput instanceof HTMLInputElement && document.activeElement !== gatewayInput) {
+    gatewayInput.value = gatewaySettings.gatewayUrl
+  }
+  element('forget-device')?.toggleAttribute('hidden', !gatewaySettings.accessToken)
 }
 
 function feedLabel(): string {
@@ -269,6 +301,7 @@ function updatePhoneImageLoading(progress: ImageLoadingProgress | null): void {
 }
 
 function updatePhone(): void {
+  updateGatewayControls()
   const post = activePost()
   const connection = element('connection')
   if (appLayer === 'view-select') {
@@ -280,8 +313,6 @@ function updatePhone(): void {
     if (element('author')) element('author')!.textContent = 'Home · Following · Bookmarks'
     if (element('post')) element('post')!.textContent = 'Tap a view to open its timeline.'
     if (element('position')) element('position')!.textContent = 'Double tap here to exit Doge'
-    element('pairing')?.toggleAttribute('hidden', Boolean(browserAccessToken()))
-    element('forget-device')?.toggleAttribute('hidden', !browserAccessToken())
     return
   }
   if (appLayer === 'profile') {
@@ -364,8 +395,6 @@ function updatePhone(): void {
     if (element('author')) element('author')!.textContent = indicator.label
     if (element('post')) element('post')!.textContent = indicator.progressLine
     if (element('position')) element('position')!.textContent = `${indicator.percent}%`
-    element('pairing')?.toggleAttribute('hidden', Boolean(browserAccessToken()))
-    element('forget-device')?.toggleAttribute('hidden', !browserAccessToken())
     return
   }
   if (connection) {
@@ -388,8 +417,6 @@ function updatePhone(): void {
     element('position')!.textContent = post
       ? `${state.index + 1} / ${state.posts.length} · ${post.likeCount} likes`
       : '—'
-  element('pairing')?.toggleAttribute('hidden', Boolean(browserAccessToken()))
-  element('forget-device')?.toggleAttribute('hidden', !browserAccessToken())
 }
 
 async function render(): Promise<void> {
@@ -802,49 +829,93 @@ for (const button of document.querySelectorAll<HTMLButtonElement>('button[data-f
 }
 element('pairing')?.addEventListener('submit', (event) => {
   event.preventDefault()
-  const input = element('access-key')
+  const tokenInput = element('access-key')
+  const gatewayInput = element('gateway-url')
+  const saveButton = element('save-gateway')
   const message = element('pairing-message')
-  if (!(input instanceof HTMLInputElement)) return
-  if (!saveBrowserAccessToken(input.value)) {
-    if (message) message.textContent = 'Enter the 43-character Doge access key.'
+  if (!(tokenInput instanceof HTMLInputElement) || !(gatewayInput instanceof HTMLInputElement)) {
     return
   }
-  input.value = ''
-  if (message) message.textContent = 'This iPhone is paired with Doge.'
-  stateRevision += 1
-  profileRevision += 1
-  state = initialReaderState()
-  appLayer = 'view-select'
-  bodyPage = 0
-  galleryImageIndex = 0
-  threadReturnBodyPage = 0
-  loadingProgress = null
-  profileState = null
-  profileBodyPage = 0
-  menuOpen = false
-  menuError = null
-  void render()
+  const candidate = {
+    gatewayUrl: gatewayInput.value,
+    accessToken: tokenInput.value.trim() || gatewaySettings.accessToken,
+  }
+  if (saveButton instanceof HTMLButtonElement) saveButton.disabled = true
+  if (message) message.textContent = 'Testing Gateway authentication…'
+  void saveGatewaySettings(gatewayStore, candidate, verifyGatewayConnection)
+    .then(async (saved) => {
+      gatewaySettings = saved
+      configureApi(saved)
+      saveBrowserAccessToken(saved.accessToken)
+      if (gatewayStore !== browserGatewayStore) {
+        await writeGatewaySettings(browserGatewayStore, saved)
+      }
+      tokenInput.value = ''
+      if (message) message.textContent = `Connected to ${saved.gatewayUrl}. Settings were saved.`
+      stateRevision += 1
+      profileRevision += 1
+      state = initialReaderState()
+      appLayer = 'view-select'
+      bodyPage = 0
+      galleryImageIndex = 0
+      threadReturnBodyPage = 0
+      loadingProgress = null
+      profileState = null
+      profileBodyPage = 0
+      menuOpen = false
+      menuError = null
+      await render()
+    })
+    .catch((error: unknown) => {
+      if (message) {
+        message.textContent = error instanceof Error ? error.message : 'Gateway connection failed.'
+      }
+    })
+    .finally(() => {
+      if (saveButton instanceof HTMLButtonElement) saveButton.disabled = false
+      updateGatewayControls()
+    })
 })
 element('forget-device')?.addEventListener('click', () => {
-  clearBrowserAccessToken()
-  stateRevision += 1
-  profileRevision += 1
-  state = { ...initialReaderState(), status: 'error', error: 'Access key required on this iPhone' }
-  appLayer = 'view-select'
-  bodyPage = 0
-  galleryImageIndex = 0
-  threadReturnBodyPage = 0
-  loadingProgress = null
-  profileState = null
-  profileBodyPage = 0
-  menuOpen = false
-  menuError = null
-  void render()
+  void (async () => {
+    clearBrowserAccessToken()
+    gatewaySettings = await writeGatewaySettings(gatewayStore, {
+      gatewayUrl: gatewaySettings.gatewayUrl,
+      accessToken: null,
+    })
+    if (gatewayStore !== browserGatewayStore) {
+      await writeGatewaySettings(browserGatewayStore, gatewaySettings)
+    }
+    configureApi(gatewaySettings)
+    const message = element('pairing-message')
+    if (message) message.textContent = 'Saved access key removed. Enter a key to reconnect.'
+    stateRevision += 1
+    profileRevision += 1
+    state = {
+      ...initialReaderState(),
+      status: 'error',
+      error: 'Access key required on this iPhone',
+    }
+    appLayer = 'view-select'
+    bodyPage = 0
+    galleryImageIndex = 0
+    threadReturnBodyPage = 0
+    loadingProgress = null
+    profileState = null
+    profileBodyPage = 0
+    menuOpen = false
+    menuError = null
+    await render()
+  })().catch((error: unknown) => console.error(error))
 })
 updatePhone()
 
 async function startGlasses(): Promise<void> {
   const bridge = await waitForEvenAppBridge()
+  gatewayStore = nativeSettingsStore(bridge)
+  gatewaySettings = await loadGatewaySettings(gatewayStore, browserGatewayStore, gatewaySettings)
+  configureApi(gatewaySettings)
+  updateGatewayControls()
   const renderedLengths = new Map<number, number>()
   const avatarCache = new Map<string, Promise<Uint8Array>>()
   const sourceImageCache = new LruPromiseCache<string, Blob>(32)
@@ -1873,6 +1944,28 @@ async function startGlasses(): Promise<void> {
       .catch((error: unknown) => console.error(error))
   })
   await render()
+  if (gatewaySettings.accessToken) {
+    void verifyGatewayConnection(gatewaySettings)
+      .then((connected) => {
+        const message = element('pairing-message')
+        if (message) {
+          message.textContent = connected
+            ? `Reconnected to ${gatewaySettings.gatewayUrl} with saved settings.`
+            : `Saved settings could not authenticate with ${gatewaySettings.gatewayUrl}.`
+        }
+        const connection = element('connection')
+        if (connection) {
+          connection.textContent = connected ? 'Saved Gateway connected' : 'Saved Gateway failed'
+          connection.dataset.state = connected ? 'ready' : 'error'
+        }
+      })
+      .catch((error: unknown) => {
+        const message = element('pairing-message')
+        if (message) {
+          message.textContent = `Saved Gateway unavailable: ${error instanceof Error ? error.message : 'connection failed'}`
+        }
+      })
+  }
 }
 
 void startGlasses().catch((error: unknown) => {

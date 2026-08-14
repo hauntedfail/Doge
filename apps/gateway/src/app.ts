@@ -70,6 +70,7 @@ export function createApp(options: AppOptions): Hono {
   })
 
   app.get('/health', (context) => context.json({ ok: true }))
+  app.get('/api/v1/session', (context) => context.json({ ok: true }))
   app.get('/api/v1/timeline', async (context) => {
     const query = timelineQuery.safeParse(context.req.query())
     if (!query.success) {

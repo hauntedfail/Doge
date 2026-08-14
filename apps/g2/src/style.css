@@ -81,9 +81,16 @@ h2 {
   margin-bottom: 14px;
   padding: 20px 22px;
 }
-.pairing[hidden],
 .forget-device[hidden] {
   display: none;
+}
+.pairing summary {
+  cursor: pointer;
+  color: #eef8f1;
+  font-weight: 700;
+}
+.pairing[open] summary {
+  margin-bottom: 16px;
 }
 .pairing p {
   color: #91a097;
@@ -107,6 +114,10 @@ h2 {
   font:
     14px/1.2 ui-monospace,
     monospace;
+}
+.pairing button:disabled {
+  cursor: wait;
+  opacity: 0.65;
 }
 .pairing-message {
   min-height: 1.5em;

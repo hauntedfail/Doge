@@ -12,12 +12,24 @@ import {
 } from '@even-g2-x-reader/contracts'
 import { browserAccessToken } from './auth.js'
 
+export interface ApiConfiguration {
+  gatewayUrl: string
+  accessToken: string | null
+}
+
 export type DataLoadStage = 'downloading' | 'preparing'
 export type DataLoadProgress = (stage: DataLoadStage) => void | Promise<void>
 export type ImageDataLoadStage = 'downloading' | 'downloaded'
 export type ImageDataLoadProgress = (stage: ImageDataLoadStage) => void | Promise<void>
 
+let runtimeConfiguration: ApiConfiguration | null = null
+
+export function configureApi(configuration: ApiConfiguration | null): void {
+  runtimeConfiguration = configuration
+}
+
 function apiBase(): string {
+  if (runtimeConfiguration) return runtimeConfiguration.gatewayUrl.replace(/\/$/u, '')
   const configured = import.meta.env.VITE_API_BASE_URL?.trim()
   if (configured) return configured.replace(/\/$/u, '')
   return window.location.port === '5173' ? 'http://127.0.0.1:8787' : window.location.origin
@@ -25,9 +37,22 @@ function apiBase(): string {
 
 function authorisedHeaders(accept: string): Headers {
   const headers = new Headers({ accept })
-  const accessToken = browserAccessToken()
+  const accessToken = runtimeConfiguration ? runtimeConfiguration.accessToken : browserAccessToken()
   if (accessToken) headers.set('authorization', `Bearer ${accessToken}`)
   return headers
+}
+
+export async function verifyGatewayConnection(configuration: ApiConfiguration): Promise<boolean> {
+  const headers: Record<string, string> = { accept: 'application/json' }
+  if (configuration.accessToken) {
+    headers.authorization = `Bearer ${configuration.accessToken}`
+  }
+  const response = await fetch(`${configuration.gatewayUrl.replace(/\/$/u, '')}/api/v1/session`, {
+    method: 'GET',
+    credentials: 'omit',
+    headers,
+  })
+  return response.ok
 }
 
 async function get(path: string, onProgress?: DataLoadProgress): Promise<unknown> {
