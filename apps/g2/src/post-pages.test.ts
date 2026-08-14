@@ -26,27 +26,27 @@ describe('scrollPostBody', () => {
         (frame) => measureTextWrap(frame.body, POST_BODY_WIDTH).lineCount <= PLAIN_BODY_LINES,
       ),
     ).toBe(true)
-    expect(frames.every((frame) => frame.imageIndex === null)).toBe(true)
+    expect(frames.every((frame) => !frame.showMedia)).toBe(true)
   })
 
-  it('adds every image as a separate page after the complete text viewport', () => {
+  it('ends with one embedded-media frame instead of full-screen pages per image', () => {
     const body = 'A post with an image and enough text to span several display lines. '.repeat(30)
     const lines = splitPostBodyLines(body)
     const frames = scrollPostBody(body, 3)
-    const textFrames = frames.slice(0, -3)
+    const finalFrame = frames.at(-1)
 
     expect(lines.join('')).toBe(body)
-    expect(textFrames.at(-1)?.body).toBe(lines.slice(-PLAIN_BODY_LINES).join(''))
-    expect(textFrames.every((frame) => frame.imageIndex === null)).toBe(true)
-    expect(frames.slice(-3)).toEqual([
-      { body: '', imageIndex: 0 },
-      { body: '', imageIndex: 1 },
-      { body: '', imageIndex: 2 },
-    ])
+    expect(finalFrame?.body).toBe(lines.slice(-3).join(''))
+    expect(finalFrame?.showMedia).toBe(true)
+    expect(frames.slice(0, -1).every((frame) => !frame.showMedia)).toBe(true)
   })
 
   it('uses a single viewport when the entire post already fits', () => {
-    expect(scrollPostBody('Short post.', 0)).toEqual([{ body: 'Short post.', imageIndex: null }])
+    expect(scrollPostBody('Short post.', 0)).toEqual([{ body: 'Short post.', showMedia: false }])
+  })
+
+  it('shows short text and all attached media in the same frame', () => {
+    expect(scrollPostBody('One line.', 4)).toEqual([{ body: 'One line.', showMedia: true }])
   })
 
   it('rejects image counts outside the X post media limit', () => {

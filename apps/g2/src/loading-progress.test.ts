@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { imageLoadingIndicator, loadingIndicator, type LoadingStage } from './loading-progress.js'
+import {
+  imageLoadingContent,
+  imageLoadingIndicator,
+  loadingIndicator,
+  type LoadingStage,
+} from './loading-progress.js'
 
 describe('loadingIndicator', () => {
   it('shows monotonic milestone progress for observable load stages', () => {
@@ -39,5 +44,10 @@ describe('loadingIndicator', () => {
     expect(indicators[0]?.title).toBe('LOADING IMAGE 2/4')
     expect(indicators.at(-1)?.label).toBe('Sending image to G2 · 4/4')
     expect(indicators.every(({ percent }) => percent < 100)).toBe(true)
+  })
+
+  it('clears a finished image loader with a bridge-safe blank', () => {
+    expect(imageLoadingContent(null)).toBe(' ')
+    expect(imageLoadingContent({ stage: 'requesting', target: 'Image' })).toContain('LOADING IMAGE')
   })
 })

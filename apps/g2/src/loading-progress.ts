@@ -82,3 +82,7 @@ export function imageLoadingIndicator(progress: ImageLoadingProgress): LoadingIn
     text: `${title}\n${progressLine}\n${details.label}`,
   }
 }
+
+export function imageLoadingContent(progress: ImageLoadingProgress | null): string {
+  return progress ? imageLoadingIndicator(progress).text : ' '
+}

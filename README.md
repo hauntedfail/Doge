@@ -45,7 +45,9 @@ twitter_api_safe_relay :6900 (localhost only)
 
 G2のscrollはcontentを引っ張るnatural/inverse方式ではありません。投稿viewでは、進みたい方向へ指をslideします（下方向で次の本文page／post、上方向で前の本文page／post）。view選択とaction menuはG2 native listのscrollに従います。
 
-長い本文はG2の実フォント幅に合わせてページ分割し、文字を省略しません。G2画面内には常設の操作guideを置かず、その領域も本文とview選択listに使います。画像付きポストでは本文を最後まで進めたページの直下に、縦横比を維持した画像を表示します。写真は最初の1枚、動画・animated GIFは静止posterを再生マーク付きで表示します。動画データの取得・再生は行いません。icon、投稿者画像、投稿画像はG2 bridgeへencoded PNG/JPEGのbyte列として渡します。高速にpostやviewを切り替えた場合、古いavatar取得結果は破棄し、最新renderだけをimage containerへ反映します。
+長い本文はG2の実フォント幅に合わせてページ分割し、文字を省略しません。G2画面内には常設の操作guideを置かず、その領域も本文とview選択listに使います。画像付きpostでは、本文末尾の同じtimeline frame内に1〜4枚を縦横比を維持したgridとして埋め込みます。本文が短いほど画像領域を大きく取り、各slotは取得中だけ独立したloading placeholderを表示します。Galleryは画像だけを最大表示する別modeです。動画・animated GIFは静止posterを再生マーク付きで表示し、動画データの取得・再生は行いません。
+
+取得済みmediaのBlobとG2用に変換済みのPNG tileはWebView memory内のLRU cacheへ短期間保持します。同じpostやGallery画像へ戻った場合はnetwork取得・decode・再変換を省略します。ただしEven SDKには眼鏡側の画像cacheをIDで再利用するAPIがないため、page rebuild後のBLE再送自体は必要です。icon、投稿者画像、投稿画像はG2 bridgeへencoded PNG/JPEGのbyte列として順番に渡します。高速にpostやviewを切り替えた場合、古いavatar取得結果は破棄し、最新renderだけをimage containerへ反映します。
 
 `apps/g2/public/doge-icon.png` はiPhone側のweb app iconと、view選択後の初回loading画面で使います。Even Hubの掲載iconには同じファイルを手動でuploadしてください。この画像だけはAGPLの対象外で、private/personal build専用です。詳細は同directoryの `doge-icon.LICENSE.md` を参照してください。
 

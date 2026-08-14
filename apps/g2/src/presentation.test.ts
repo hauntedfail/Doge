@@ -61,20 +61,15 @@ describe('renderGlassesText', () => {
         bookmark: '5',
       },
     })
-    const firstImageSections = renderGlassesSections(state, sections.bodyPageCount - 2)
-    expect(firstImageSections.postImageUrl).toBe(
-      'https://pbs.twimg.com/media/Example123?format=jpg&name=small',
-    )
-    expect(firstImageSections.postImageKind).toBe('video_thumbnail')
-    expect(firstImageSections.postImageIndex).toBe(0)
     const finalSections = renderGlassesSections(state, sections.bodyPageCount - 1)
     expect(finalSections).toMatchObject({
-      postImageUrl: 'https://pbs.twimg.com/media/Example456?format=jpg&name=small',
-      postImageKind: 'photo',
-      postImageIndex: 1,
+      postImageUrl: 'https://pbs.twimg.com/media/Example123?format=jpg&name=small',
+      postImageKind: 'video_thumbnail',
+      postImageIndex: 0,
       postImageCount: 2,
-      body: '',
     })
+    expect(finalSections.postImages).toEqual(post.images)
+    expect(finalSections.body.length).toBeGreaterThan(0)
     expect(sections.bodyPageCount).toBeGreaterThan(2)
     expect(sections.body).not.toMatch(/\b(?:RE|RP|LIKE|VIEW)\b/u)
     expect(sections).not.toHaveProperty('header')

@@ -2,10 +2,11 @@ import { getTextWidth, measureTextWrap } from '@evenrealities/pretext'
 
 export const POST_BODY_WIDTH = 560
 export const PLAIN_BODY_LINES = 7
+export const EMBEDDED_MEDIA_BODY_LINES = 3
 
 export interface PostDisplayFrame {
   body: string
-  imageIndex: number | null
+  showMedia: boolean
 }
 
 function isBreakable(character: string): boolean {
@@ -90,18 +91,36 @@ export function splitPostBodyLines(text: string): string[] {
 
 // Stop at the first frame whose remaining suffix fits, just like a normal
 // scroll view stops with its final line at the bottom instead of the top.
+function bodyAt(lines: string[], start: number, lineLimit: number): string {
+  let body = lines[start] ?? ''
+  for (let end = start + 2; end <= lines.length; end += 1) {
+    const candidate = lines.slice(start, end).join('')
+    if (measureTextWrap(candidate, POST_BODY_WIDTH).lineCount > lineLimit) break
+    body = candidate
+  }
+  return body
+}
+
 function rollingTextFrames(lines: string[]): PostDisplayFrame[] {
   const frames: PostDisplayFrame[] = []
   for (let start = 0; start < lines.length; start += 1) {
-    let body = lines[start] ?? ''
-    for (let end = start + 2; end <= lines.length; end += 1) {
-      const candidate = lines.slice(start, end).join('')
-      if (measureTextWrap(candidate, POST_BODY_WIDTH).lineCount > PLAIN_BODY_LINES) break
-      body = candidate
-    }
-    frames.push({ body, imageIndex: null })
+    const body = bodyAt(lines, start, PLAIN_BODY_LINES)
+    frames.push({ body, showMedia: false })
     const remaining = lines.slice(start).join('')
     if (measureTextWrap(remaining, POST_BODY_WIDTH).lineCount <= PLAIN_BODY_LINES) break
+  }
+  return frames
+}
+
+function rollingMediaFrames(lines: string[]): PostDisplayFrame[] {
+  const frames: PostDisplayFrame[] = []
+  for (let start = 0; start < lines.length; start += 1) {
+    const remaining = lines.slice(start).join('')
+    if (measureTextWrap(remaining, POST_BODY_WIDTH).lineCount <= EMBEDDED_MEDIA_BODY_LINES) {
+      frames.push({ body: remaining, showMedia: true })
+      break
+    }
+    frames.push({ body: bodyAt(lines, start, PLAIN_BODY_LINES), showMedia: false })
   }
   return frames
 }
@@ -111,8 +130,5 @@ export function scrollPostBody(text: string, imageCount: number): PostDisplayFra
     throw new Error('Image count must be an integer from 0 to 4')
   }
   const lines = splitPostBodyLines(text)
-  return [
-    ...rollingTextFrames(lines),
-    ...Array.from({ length: imageCount }, (_, imageIndex) => ({ body: '', imageIndex })),
-  ]
+  return imageCount === 0 ? rollingTextFrames(lines) : rollingMediaFrames(lines)
 }

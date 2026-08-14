@@ -1,4 +1,4 @@
-import type { Post, PostImageKind } from '@even-g2-x-reader/contracts'
+import type { Post, PostImage, PostImageKind } from '@even-g2-x-reader/contracts'
 import { loadingIndicator, type LoadingProgress } from './loading-progress.js'
 import { scrollPostBody } from './post-pages.js'
 import type { ReaderState } from './reader-state.js'
@@ -12,6 +12,7 @@ export interface GlassesSections {
   postImageKind: PostImageKind | null
   postImageIndex: number | null
   postImageCount: number
+  postImages: readonly PostImage[]
   metricCounts: {
     reply: string
     repost: string
@@ -53,9 +54,8 @@ function date(value: string): string {
 function postSections(post: Post, state: ReaderState, requestedPosition: number): GlassesSections {
   const frames = scrollPostBody(clean(post.text), post.images.length)
   const bodyPage = Math.min(Math.max(0, requestedPosition), frames.length - 1)
-  const displayFrame = frames[bodyPage] ?? { body: '', imageIndex: null }
-  const postImage =
-    displayFrame.imageIndex === null ? undefined : post.images[displayFrame.imageIndex]
+  const displayFrame = frames[bodyPage] ?? { body: '', showMedia: false }
+  const postImage = displayFrame.showMedia ? post.images[0] : undefined
   const author =
     `${clean(post.authorName)}\n@${clean(post.authorHandle)}  ${date(post.createdAt)}`.trim()
   return {
@@ -65,8 +65,9 @@ function postSections(post: Post, state: ReaderState, requestedPosition: number)
     avatarUrl: post.authorAvatarUrl,
     postImageUrl: postImage?.url ?? null,
     postImageKind: postImage?.kind ?? null,
-    postImageIndex: displayFrame.imageIndex,
+    postImageIndex: displayFrame.showMedia && post.images.length > 0 ? 0 : null,
     postImageCount: post.images.length,
+    postImages: displayFrame.showMedia ? post.images : [],
     metricCounts: {
       reply: compact(post.replyCount),
       repost: compact(post.repostCount),
@@ -94,6 +95,7 @@ export function renderGlassesSections(
       postImageKind: null,
       postImageIndex: null,
       postImageCount: 0,
+      postImages: [],
       metricCounts: { reply: '', repost: '', like: '', view: '', bookmark: '' },
       bodyPage: 0,
       bodyPageCount: 1,
@@ -112,6 +114,7 @@ export function renderGlassesSections(
       postImageKind: null,
       postImageIndex: null,
       postImageCount: 0,
+      postImages: [],
       metricCounts: { reply: '', repost: '', like: '', view: '', bookmark: '' },
       bodyPage: 0,
       bodyPageCount: 1,
@@ -129,6 +132,7 @@ export function renderGlassesSections(
         postImageKind: null,
         postImageIndex: null,
         postImageCount: 0,
+        postImages: [],
         metricCounts: { reply: '', repost: '', like: '', view: '', bookmark: '' },
         bodyPage: 0,
         bodyPageCount: 1,

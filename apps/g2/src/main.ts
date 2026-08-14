@@ -1,5 +1,5 @@
 import './style.css'
-import type { Post, PostImageKind } from '@even-g2-x-reader/contracts'
+import type { Post, PostImage, PostImageKind } from '@even-g2-x-reader/contracts'
 import {
   CreateStartUpPageContainer,
   ImageContainerProperty,
@@ -14,7 +14,7 @@ import {
   waitForEvenAppBridge,
   type EvenHubEvent,
 } from '@evenrealities/even_hub_sdk'
-import { getTextWidth } from '@evenrealities/pretext'
+import { getTextWidth, measureTextWrap } from '@evenrealities/pretext'
 import {
   loadAvatarImage,
   loadPostImage,
@@ -28,11 +28,22 @@ import { browserAccessToken, clearBrowserAccessToken, saveBrowserAccessToken } f
 import { registerBackgroundState } from './background-state.js'
 import { VIEW_OPTIONS, backDestination, feedForViewIndex, type AppLayer } from './app-navigation.js'
 import { canvasPngBytes } from './image-bytes.js'
+import {
+  embeddedMediaLayout,
+  embeddedMediaTileIndexes,
+  renderEmbeddedMediaTiles,
+  type EmbeddedMediaLayout,
+  type EmbeddedMediaLoadState,
+  type EmbeddedMediaPageKind,
+  type EmbeddedMediaTileData,
+} from './embedded-media.js'
 import { galleryTitle, slideGalleryIndex } from './gallery.js'
+import { LruPromiseCache } from './image-cache.js'
 import { classifyInput, type SwipeDirection } from './input.js'
 import { LatestRenderEpoch, renderLatestImage } from './latest-image.js'
 import {
   imageLoadingIndicator,
+  imageLoadingContent,
   loadingIndicator,
   type ImageLoadingProgress,
   type LoadingOperation,
@@ -59,6 +70,7 @@ import {
   type FullscreenImageTileData,
   type PostImageLayout,
 } from './post-image.js'
+import { POST_BODY_WIDTH } from './post-pages.js'
 import { renderGlassesSections } from './presentation.js'
 import { profileSummary } from './profile-presentation.js'
 import { initialProfileState, reduceProfileState, type ProfileState } from './profile-state.js'
@@ -88,6 +100,8 @@ const BOOKMARK_COUNT_ID = 13
 const ACTION_MENU_BACKGROUND_BOTTOM_ID = 14
 const POST_IMAGE_INPUT_ID = 30
 const POST_IMAGE_LOADING_ID = 35
+const EMBEDDED_MEDIA_LEFT_ID = 36
+const EMBEDDED_MEDIA_RIGHT_ID = 37
 const VIEW_TITLE_ID = 20
 const VIEW_LIST_ID = 22
 const LOADING_TITLE_ID = 40
@@ -107,6 +121,8 @@ const BOOKMARK_COUNT_NAME = 'doge_bm_num'
 const METRIC_STRIP_NAME = 'doge_metrics'
 const POST_IMAGE_INPUT_NAME = 'doge_img_input'
 const POST_IMAGE_LOADING_NAME = 'doge_img_load'
+const EMBEDDED_MEDIA_LEFT_NAME = 'doge_media_l'
+const EMBEDDED_MEDIA_RIGHT_NAME = 'doge_media_r'
 const POST_IMAGE_TILE_CONFIG = [
   { containerID: 31, containerName: 'doge_img_0', dataIndex: 0 },
   { containerID: 32, containerName: 'doge_img_1', dataIndex: 1 },
@@ -831,12 +847,16 @@ async function startGlasses(): Promise<void> {
   const bridge = await waitForEvenAppBridge()
   const renderedLengths = new Map<number, number>()
   const avatarCache = new Map<string, Promise<Uint8Array>>()
-  const postImageCache = new Map<string, Promise<FullscreenImageTileData>>()
+  const sourceImageCache = new LruPromiseCache<string, Blob>(32)
+  const postImageCache = new LruPromiseCache<string, FullscreenImageTileData>(32)
+  const embeddedMediaCache = new LruPromiseCache<string, EmbeddedMediaTileData>(24)
   let renderedAvatarUrl: string | null | undefined
   let renderedPostImageKey: string | null | undefined
+  let renderedEmbeddedMediaKey: string | null | undefined
   let renderedMenuSignature = ''
   let renderedMetricSignature = ''
-  let renderedPageKind: AppLayer | 'post-image' | 'loading' | 'initial-loading' = 'view-select'
+  let renderedPageKind: AppLayer | EmbeddedMediaPageKind | 'loading' | 'initial-loading' =
+    'view-select'
   let bridgeQueue = Promise.resolve()
   let loadingLogoDataPromise: Promise<Uint8Array> | undefined
 
@@ -919,6 +939,20 @@ async function startGlasses(): Promise<void> {
       })
     })
 
+  const embeddedMediaContainers = (layout: EmbeddedMediaLayout) =>
+    layout.tiles.map(
+      (tile, index) =>
+        new ImageContainerProperty({
+          xPosition: tile.x,
+          yPosition: tile.y,
+          width: tile.width,
+          height: tile.height,
+          containerID: index === 0 ? EMBEDDED_MEDIA_LEFT_ID : EMBEDDED_MEDIA_RIGHT_ID,
+          containerName: index === 0 ? EMBEDDED_MEDIA_LEFT_NAME : EMBEDDED_MEDIA_RIGHT_NAME,
+          zOrderIndex: 13 + index,
+        }),
+    )
+
   const actionMenu = (items: string[]) =>
     new ListContainerProperty({
       xPosition: ACTION_MENU_BOUNDS.x,
@@ -995,6 +1029,7 @@ async function startGlasses(): Promise<void> {
     listObject: [viewList()],
     menuSignature: '',
     image: null,
+    embeddedMedia: null,
   })
 
   const centredLoadingText = (
@@ -1053,6 +1088,7 @@ async function startGlasses(): Promise<void> {
       listObject: [],
       menuSignature: '',
       image: null,
+      embeddedMedia: null,
     }
   }
 
@@ -1100,6 +1136,7 @@ async function startGlasses(): Promise<void> {
       listObject: [],
       menuSignature: '',
       image: null,
+      embeddedMedia: null,
     }
   }
 
@@ -1118,6 +1155,13 @@ async function startGlasses(): Promise<void> {
             ),
           ]
         : []
+    const mediaLayout =
+      menuItems.length === 0 && sections.postImages.length > 0
+        ? embeddedMediaLayout(
+            measureTextWrap(sections.body, POST_BODY_WIDTH).lineCount,
+            sections.postImages.length,
+          )
+        : null
     const textObject = [
       ...(menuItems.length === 0
         ? [
@@ -1140,7 +1184,7 @@ async function startGlasses(): Promise<void> {
         8,
         BODY_Y,
         560,
-        PLAIN_BODY_HEIGHT,
+        mediaLayout ? Math.max(20, mediaLayout.y - BODY_Y - 4) : PLAIN_BODY_HEIGHT,
         3,
         sections.body,
         menuItems.length > 0 ? 0 : 1,
@@ -1160,51 +1204,25 @@ async function startGlasses(): Promise<void> {
       }),
     ]
     return {
-      pageKind: 'reader' as const,
+      pageKind: mediaLayout?.pageKind ?? ('reader' as const),
       textObject,
       imageObject: [
         avatarContainer(),
         metricStripContainer(),
-        ...(menuItems.length > 0 ? actionMenuBackgrounds() : []),
+        ...(mediaLayout
+          ? embeddedMediaContainers(mediaLayout)
+          : menuItems.length > 0
+            ? actionMenuBackgrounds()
+            : []),
       ],
       listObject: menuItems.length > 0 ? [actionMenu(menuItems)] : [],
       menuSignature: menuItems.join('\u0000'),
       image: null,
+      embeddedMedia: mediaLayout
+        ? { images: sections.postImages, layout: mediaLayout, postId: post?.id ?? '' }
+        : null,
     }
   }
-
-  const postImagePage = (sections: ReturnType<typeof renderGlassesSections>) => ({
-    pageKind: 'post-image' as const,
-    textObject: [
-      textContainer(POST_IMAGE_INPUT_ID, POST_IMAGE_INPUT_NAME, 0, 0, 576, 288, 0, ' ', 1),
-      textContainer(
-        POST_IMAGE_LOADING_ID,
-        POST_IMAGE_LOADING_NAME,
-        96,
-        96,
-        384,
-        96,
-        5,
-        imageLoadingIndicator({ stage: 'requesting', target: 'Image' }).text,
-      ),
-    ],
-    imageObject: postImageTileContainers(),
-    listObject: [],
-    menuSignature: '',
-    image:
-      sections.postImageUrl && sections.postImageKind
-        ? {
-            url: sections.postImageUrl,
-            kind: sections.postImageKind,
-            layout: 'fullscreen' as const,
-            title: undefined,
-            target:
-              sections.postImageCount > 1 && sections.postImageIndex !== null
-                ? `Image ${sections.postImageIndex + 1}/${sections.postImageCount}`
-                : 'Image',
-          }
-        : null,
-  })
 
   const galleryPage = (post: NonNullable<(typeof state.posts)[number]>) => {
     const image = post.images[galleryImageIndex]
@@ -1230,6 +1248,7 @@ async function startGlasses(): Promise<void> {
       imageObject: postImageTileContainers(),
       listObject: [],
       menuSignature: '',
+      embeddedMedia: null,
       image: image
         ? {
             url: image.url,
@@ -1251,13 +1270,11 @@ async function startGlasses(): Promise<void> {
       }
       const reader = profileReaderState()
       if (!reader) return profilePage()
-      if (sections.postImageUrl) return postImagePage(sections)
       return readerPage(sections, reader, false)
     }
     if (state.status === 'loading') return loadingPage()
     const post = state.posts[state.index]
     if (appLayer === 'gallery' && post?.images.length) return galleryPage(post)
-    if (sections.postImageUrl && !menuOpen) return postImagePage(sections)
     return readerPage(sections, state, true)
   }
 
@@ -1425,36 +1442,41 @@ async function startGlasses(): Promise<void> {
     renderedMetricSignature = signature
   }
 
-  const postImageData = async (
+  const sourceImageData = (
+    url: string,
+    onProgress?: (stage: 'downloading' | 'processing') => Promise<void>,
+  ) =>
+    sourceImageCache.getOrLoad(url, () =>
+      loadPostImage(url, async (stage) => {
+        await onProgress?.(stage === 'downloading' ? 'downloading' : 'processing')
+      }),
+    )
+
+  const postImageData = (
     url: string,
     kind: PostImageKind,
     layout: PostImageLayout,
     title?: string,
     onProgress?: (stage: 'downloading' | 'processing') => Promise<void>,
-  ): Promise<FullscreenImageTileData> => {
+  ) => {
     const key = `${layout}:${kind}:${title ?? ''}:${url}`
-    let pending = postImageCache.get(key)
-    if (!pending) {
-      pending = loadPostImage(url, async (stage) => {
-        await onProgress?.(stage === 'downloading' ? 'downloading' : 'processing')
-      }).then((image) => renderPostImageTiles(image, kind, layout, title))
-      postImageCache.set(key, pending)
-      if (postImageCache.size > 8) postImageCache.delete(postImageCache.keys().next().value ?? '')
-    }
-    try {
-      return await pending
-    } catch (error) {
-      postImageCache.delete(key)
-      console.warn('Unable to load post image', error)
-      return renderPostImagePlaceholderTiles(kind, layout, title)
-    }
+    return postImageCache.getOrLoad(key, async () => {
+      try {
+        const source = sourceImageData(url, onProgress)
+        return await renderPostImageTiles(await source.value, kind, layout, title)
+      } catch (error) {
+        postImageCache.delete(key)
+        console.warn('Unable to load post image', error)
+        return renderPostImagePlaceholderTiles(kind, layout, title)
+      }
+    })
   }
 
   const updatePostImageLoading = async (
     progress: ImageLoadingProgress | null,
   ): Promise<boolean> => {
     updatePhoneImageLoading(progress)
-    const content = progress ? imageLoadingIndicator(progress).text : ''
+    const content = imageLoadingContent(progress)
     const previousLength = renderedLengths.get(POST_IMAGE_LOADING_ID) ?? 0
     const updated = await bridge.textContainerUpgrade(
       new TextContainerUpgrade({
@@ -1479,38 +1501,142 @@ async function startGlasses(): Promise<void> {
     epoch?: number,
   ): Promise<void> => {
     const key = `${layout}:${kind}:${title ?? ''}:${url}`
-    if (!force && renderedPostImageKey === key) return
+    if (!force && renderedPostImageKey === key) {
+      await updatePostImageLoading(null)
+      return
+    }
     const isCurrent = () => epoch === undefined || latestRenderEpoch.isCurrent(epoch)
-    await updatePostImageLoading({ stage: 'requesting', target })
-    const tiles = await postImageData(url, kind, layout, title, async (stage) => {
-      if (!isCurrent()) return
-      await updatePostImageLoading({ stage, target })
+    const cached = postImageData(url, kind, layout, title, async (stage) => {
+      if (isCurrent()) await updatePostImageLoading({ stage, target })
     })
-    if (!isCurrent()) return
-    await updatePostImageLoading({ stage: 'transferring', completedTiles: 0, target })
-    for (const [index, config] of POST_IMAGE_TILE_CONFIG.entries()) {
+    if (cached.hit) await updatePostImageLoading(null)
+    else await updatePostImageLoading({ stage: 'requesting', target })
+    try {
+      const tiles = await cached.value
       if (!isCurrent()) return
+      if (!cached.hit) {
+        await updatePostImageLoading({ stage: 'transferring', completedTiles: 0, target })
+      }
+      for (const [index, config] of POST_IMAGE_TILE_CONFIG.entries()) {
+        if (!isCurrent()) return
+        const result = await bridge.updateImageRawData(
+          new ImageRawDataUpdate({
+            containerID: config.containerID,
+            containerName: config.containerName,
+            imageData: tiles[config.dataIndex],
+          }),
+        )
+        if (result !== ImageRawDataUpdateResult.success) {
+          console.warn(`Post image tile ${config.dataIndex + 1} update failed: ${result}`)
+          return
+        }
+        if (!cached.hit && isCurrent()) {
+          await updatePostImageLoading({
+            stage: 'transferring',
+            completedTiles: (index + 1) as 1 | 2 | 3 | 4,
+            target,
+          })
+        }
+      }
+      renderedPostImageKey = key
+    } finally {
+      if (isCurrent()) await updatePostImageLoading(null)
+    }
+  }
+
+  const embeddedMediaKey = (
+    postId: string,
+    images: readonly PostImage[],
+    layout: EmbeddedMediaLayout,
+  ): string =>
+    `${postId}:${layout.pageKind}:${images.map((image) => `${image.kind}:${image.url}`).join('|')}`
+
+  const sendEmbeddedMediaTiles = async (
+    tiles: EmbeddedMediaTileData,
+    tileIndexes: readonly (0 | 1)[] = [0, 1],
+  ): Promise<boolean> => {
+    const configs = [
+      { containerID: EMBEDDED_MEDIA_LEFT_ID, containerName: EMBEDDED_MEDIA_LEFT_NAME },
+      { containerID: EMBEDDED_MEDIA_RIGHT_ID, containerName: EMBEDDED_MEDIA_RIGHT_NAME },
+    ] as const
+    for (const index of tileIndexes) {
+      const config = configs[index]
+      const imageData = tiles[index]
       const result = await bridge.updateImageRawData(
         new ImageRawDataUpdate({
-          containerID: config.containerID,
-          containerName: config.containerName,
-          imageData: tiles[config.dataIndex],
+          ...config,
+          imageData,
         }),
       )
       if (result !== ImageRawDataUpdateResult.success) {
-        console.warn(`Post image tile ${config.dataIndex + 1} update failed: ${result}`)
-        await updatePostImageLoading(null)
-        return
+        console.warn(`Embedded media tile ${index + 1} update failed: ${result}`)
+        return false
       }
-      if (!isCurrent()) return
-      await updatePostImageLoading({
-        stage: 'transferring',
-        completedTiles: (index + 1) as 1 | 2 | 3 | 4,
-        target,
-      })
     }
-    renderedPostImageKey = key
-    await updatePostImageLoading(null)
+    return true
+  }
+
+  const updateEmbeddedMedia = async (
+    postId: string,
+    images: readonly PostImage[],
+    layout: EmbeddedMediaLayout,
+    force: boolean,
+    epoch: number,
+  ): Promise<void> => {
+    const key = embeddedMediaKey(postId, images, layout)
+    if (!force && renderedEmbeddedMediaKey === key) return
+    const cached = embeddedMediaCache.get(key)
+    if (cached) {
+      const tiles = await cached
+      if (!latestRenderEpoch.isCurrent(epoch)) return
+      if (await sendEmbeddedMediaTiles(tiles)) renderedEmbeddedMediaKey = key
+      return
+    }
+
+    const states: EmbeddedMediaLoadState[] = images.map(() => ({ status: 'loading' }))
+    let tiles = await renderEmbeddedMediaTiles(images, states, layout)
+    if (!latestRenderEpoch.isCurrent(epoch) || !(await sendEmbeddedMediaTiles(tiles))) return
+
+    let failed = false
+    const pending = images.map((image, index) =>
+      sourceImageData(image.url).value.then(
+        (blob) => ({ index, state: { status: 'ready', blob } as const }),
+        (error: unknown) => {
+          console.warn('Unable to load embedded post image', error)
+          return { index, state: { status: 'error' } as const }
+        },
+      ),
+    )
+    while (pending.length > 0) {
+      const completed = await Promise.race(
+        pending.map((promise, position) => promise.then((result) => ({ position, ...result }))),
+      )
+      pending.splice(completed.position, 1)
+      states[completed.index] = completed.state
+      if (completed.state.status === 'error') failed = true
+      tiles = await renderEmbeddedMediaTiles(images, states, layout)
+      if (!latestRenderEpoch.isCurrent(epoch)) return
+      if (!(await sendEmbeddedMediaTiles(tiles, embeddedMediaTileIndexes(layout, completed.index))))
+        return
+    }
+    if (!failed) embeddedMediaCache.set(key, Promise.resolve(tiles))
+    renderedEmbeddedMediaKey = key
+  }
+
+  const prefetchPostSources = (post: Post | undefined): void => {
+    if (!post) return
+    for (const image of post.images) {
+      void sourceImageData(image.url).value.catch(() => undefined)
+    }
+  }
+
+  const prefetchGalleryNeighbours = (post: Post, index: number): void => {
+    for (const neighbour of [index - 1, index + 1]) {
+      const image = post.images[neighbour]
+      if (!image) continue
+      const title = galleryTitle(neighbour, post.images.length)
+      void postImageData(image.url, image.kind, 'gallery', title).value.catch(() => undefined)
+    }
   }
 
   const rememberTextLengths = (textObject: TextContainerProperty[]): void => {
@@ -1525,6 +1651,7 @@ async function startGlasses(): Promise<void> {
     force: boolean,
     epoch: number,
   ): Promise<void> => {
+    prefetchPostSources(activePost())
     await updateAvatar(sections.avatarUrl, force, epoch)
     if (!latestRenderEpoch.isCurrent(epoch)) return
     await updateMetricStrip(force, activePost())
@@ -1563,7 +1690,7 @@ async function startGlasses(): Promise<void> {
     const nextPage = page(sections)
     let needsRebuild =
       nextPage.pageKind !== renderedPageKind || nextPage.menuSignature !== renderedMenuSignature
-    if (!needsRebuild && nextPage.pageKind !== 'post-image' && nextPage.pageKind !== 'gallery') {
+    if (!needsRebuild && nextPage.pageKind !== 'gallery') {
       for (const text of nextPage.textObject) {
         const containerID = text.containerID ?? 0
         const containerName = text.containerName ?? ''
@@ -1601,16 +1728,31 @@ async function startGlasses(): Promise<void> {
         await updateLoadingLogo()
         renderedAvatarUrl = undefined
         renderedPostImageKey = undefined
+        renderedEmbeddedMediaKey = undefined
         renderedMetricSignature = ''
+      } else if (nextPage.embeddedMedia) {
+        await refreshReaderPageImages(sections, true, epoch)
+        if (!latestRenderEpoch.isCurrent(epoch)) return
+        await updateEmbeddedMedia(
+          nextPage.embeddedMedia.postId,
+          nextPage.embeddedMedia.images,
+          nextPage.embeddedMedia.layout,
+          true,
+          epoch,
+        )
+        renderedPostImageKey = undefined
       } else if (nextPage.pageKind === 'reader') {
         await refreshReaderPageImages(sections, true, epoch)
         renderedPostImageKey = undefined
+        renderedEmbeddedMediaKey = undefined
       } else if (nextPage.pageKind === 'profile') {
         await updateAvatar(profileState?.profile?.avatarUrl ?? null, true, epoch)
         renderedPostImageKey = undefined
+        renderedEmbeddedMediaKey = undefined
         renderedMetricSignature = ''
       } else if (nextPage.image) {
         renderedAvatarUrl = undefined
+        renderedEmbeddedMediaKey = undefined
         renderedMetricSignature = ''
         await updatePostImage(
           nextPage.image.url,
@@ -1621,11 +1763,30 @@ async function startGlasses(): Promise<void> {
           true,
           epoch,
         )
+        const post = activePost()
+        if (nextPage.pageKind === 'gallery' && post) {
+          prefetchGalleryNeighbours(post, galleryImageIndex)
+        }
       } else {
         renderedAvatarUrl = undefined
         renderedPostImageKey = undefined
+        renderedEmbeddedMediaKey = undefined
         renderedMetricSignature = ''
       }
+      return
+    }
+    if (nextPage.embeddedMedia) {
+      await updateAvatar(sections.avatarUrl, false, epoch)
+      if (!latestRenderEpoch.isCurrent(epoch)) return
+      await updateMetricStrip(false, activePost())
+      if (!latestRenderEpoch.isCurrent(epoch)) return
+      await updateEmbeddedMedia(
+        nextPage.embeddedMedia.postId,
+        nextPage.embeddedMedia.images,
+        nextPage.embeddedMedia.layout,
+        false,
+        epoch,
+      )
       return
     }
     if (nextPage.pageKind === 'reader') {
@@ -1648,6 +1809,10 @@ async function startGlasses(): Promise<void> {
         false,
         epoch,
       )
+      const post = activePost()
+      if (nextPage.pageKind === 'gallery' && post) {
+        prefetchGalleryNeighbours(post, galleryImageIndex)
+      }
     }
   }
   updateGlasses = (epoch) => {
