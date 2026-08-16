@@ -2,7 +2,7 @@
   "package_id": "ru.h1ka.g2xreader",
   "edition": "202601",
   "name": "Doge",
-  "version": "0.6.3",
+  "version": "0.6.4",
   "min_app_version": "2.2.6",
   "min_sdk_version": "0.0.13",
   "entrypoint": "index.html",

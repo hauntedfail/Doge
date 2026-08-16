@@ -49,8 +49,13 @@ export async function verifyGatewayConnection(configuration: ApiConfiguration): 
     credentials: 'omit',
     headers,
   })
-  if (!response.ok) return false
-  return gatewaySessionSchema.safeParse(await response.json()).success
+  if (response.status === 401 || response.status === 403) return false
+  if (!response.ok) throw new Error(`Gateway connection failed with HTTP ${response.status}.`)
+  try {
+    return gatewaySessionSchema.safeParse(await response.json()).success
+  } catch {
+    return false
+  }
 }
 
 async function get(path: string, onProgress?: DataLoadProgress): Promise<unknown> {

@@ -1,4 +1,5 @@
 export const GATEWAY_SETTINGS_KEY = 'doge-gateway-settings-v1'
+export const GATEWAY_URL_DRAFT_KEY = 'doge-gateway-url-draft-v1'
 
 const ACCESS_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/u
 
@@ -80,6 +81,44 @@ async function readSettings(store: SettingsStore | undefined): Promise<GatewaySe
   } catch {
     return null
   }
+}
+
+async function readGatewayUrlDraft(store: SettingsStore | undefined): Promise<string | null> {
+  if (!store) return null
+  try {
+    const value = await store.get(GATEWAY_URL_DRAFT_KEY)
+    return value ? normaliseGatewayUrl(value) : null
+  } catch {
+    return null
+  }
+}
+
+export async function writeGatewayUrlDraft(
+  store: SettingsStore,
+  gatewayUrl: string,
+): Promise<string> {
+  const normalised = normaliseGatewayUrl(gatewayUrl)
+  if (!(await store.set(GATEWAY_URL_DRAFT_KEY, normalised))) {
+    throw new Error('The Even app could not save the Gateway URL.')
+  }
+  return normalised
+}
+
+export async function loadGatewayUrlDraft(
+  primary: SettingsStore,
+  fallback: SettingsStore | undefined,
+): Promise<string | null> {
+  const native = await readGatewayUrlDraft(primary)
+  if (native) return native
+
+  const migrated = await readGatewayUrlDraft(fallback)
+  if (!migrated) return null
+  try {
+    await writeGatewayUrlDraft(primary, migrated)
+  } catch {
+    // Keep using the WebView fallback for this session and retry native migration next launch.
+  }
+  return migrated
 }
 
 export async function writeGatewaySettings(

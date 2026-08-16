@@ -40,6 +40,12 @@ import {
   type EmbeddedMediaTileData,
 } from './embedded-media.js'
 import { galleryTitle, slideGalleryIndex } from './gallery.js'
+import {
+  captureGatewayUrlDraft,
+  commitGatewayUrlDraft,
+  gatewayUrlInputValue,
+  initialGatewayFormState,
+} from './gateway-form.js'
 import { LruPromiseCache } from './image-cache.js'
 import { classifyInput, type SwipeDirection } from './input.js'
 import { LatestRenderEpoch, renderLatestImage } from './latest-image.js'
@@ -80,9 +86,11 @@ import { reactionMenuItems, reactionSelection } from './reaction-menu.js'
 import {
   browserSettingsStore,
   EMPTY_GATEWAY_SETTINGS,
+  loadGatewayUrlDraft,
   loadGatewaySettings,
   nativeSettingsStore,
   saveGatewaySettings,
+  writeGatewayUrlDraft,
   writeGatewaySettings,
   type AuthenticatedGatewaySettings,
   type GatewaySettings,
@@ -217,6 +225,7 @@ const browserGatewayStore = browserSettingsStore(window.localStorage)
 let legacyBrowserAccessToken = browserAccessToken()
 let gatewayStore: SettingsStore = browserGatewayStore
 let gatewaySettings: GatewaySettings = { ...EMPTY_GATEWAY_SETTINGS }
+let gatewayFormState = initialGatewayFormState()
 configureApi(null)
 
 type ReaderCommand = SwipeDirection | 'confirm' | 'toggle-detail'
@@ -228,7 +237,7 @@ function element(id: string): HTMLElement | null {
 function updateGatewayControls(): void {
   const gatewayInput = element('gateway-url')
   if (gatewayInput instanceof HTMLInputElement && document.activeElement !== gatewayInput) {
-    gatewayInput.value = gatewaySettings.gatewayUrl ?? ''
+    gatewayInput.value = gatewayUrlInputValue(gatewayFormState, gatewaySettings.gatewayUrl)
   }
   const settingsPanel = element('gateway-settings')
   if (settingsPanel instanceof HTMLDetailsElement && !authenticatedGatewaySettings()) {
@@ -241,6 +250,27 @@ function authenticatedGatewaySettings(): AuthenticatedGatewaySettings | null {
   return gatewaySettings.gatewayUrl && gatewaySettings.accessToken
     ? { gatewayUrl: gatewaySettings.gatewayUrl, accessToken: gatewaySettings.accessToken }
     : null
+}
+
+async function persistGatewayUrlDraft(gatewayUrl: string): Promise<string> {
+  const saved = await writeGatewayUrlDraft(gatewayStore, gatewayUrl)
+  if (gatewayStore !== browserGatewayStore) {
+    try {
+      await writeGatewayUrlDraft(browserGatewayStore, saved)
+    } catch (error) {
+      console.warn('Unable to update the WebView Gateway URL fallback', error)
+    }
+  }
+  return saved
+}
+
+async function persistBrowserSettingsFallback(settings: GatewaySettings): Promise<void> {
+  if (gatewayStore === browserGatewayStore) return
+  try {
+    await writeGatewaySettings(browserGatewayStore, settings)
+  } catch (error) {
+    console.warn('Unable to update the WebView Gateway settings fallback', error)
+  }
 }
 
 function feedLabel(): string {
@@ -851,6 +881,11 @@ for (const button of document.querySelectorAll<HTMLButtonElement>('button[data-f
     if (feed) void openView(feed)
   })
 }
+element('gateway-url')?.addEventListener('input', (event) => {
+  if (event.currentTarget instanceof HTMLInputElement) {
+    gatewayFormState = captureGatewayUrlDraft(gatewayFormState, event.currentTarget.value)
+  }
+})
 element('pairing')?.addEventListener('submit', (event) => {
   event.preventDefault()
   const tokenInput = element('access-key')
@@ -860,37 +895,43 @@ element('pairing')?.addEventListener('submit', (event) => {
   if (!(tokenInput instanceof HTMLInputElement) || !(gatewayInput instanceof HTMLInputElement)) {
     return
   }
+  gatewayFormState = captureGatewayUrlDraft(gatewayFormState, gatewayInput.value)
   const candidate = {
-    gatewayUrl: gatewayInput.value,
+    gatewayUrl: gatewayUrlInputValue(gatewayFormState, gatewaySettings.gatewayUrl),
     accessToken: tokenInput.value.trim() || gatewaySettings.accessToken || legacyBrowserAccessToken,
   }
   if (saveButton instanceof HTMLButtonElement) saveButton.disabled = true
   if (message) message.textContent = 'Testing Gateway authentication…'
-  void saveGatewaySettings(gatewayStore, candidate, verifyGatewayConnection)
-    .then(async (saved) => {
-      gatewaySettings = saved
-      configureApi(saved)
-      saveBrowserAccessToken(saved.accessToken)
-      legacyBrowserAccessToken = saved.accessToken
-      if (gatewayStore !== browserGatewayStore) {
-        await writeGatewaySettings(browserGatewayStore, saved)
-      }
-      tokenInput.value = ''
-      if (message) message.textContent = `Connected to ${saved.gatewayUrl}. Settings were saved.`
-      stateRevision += 1
-      profileRevision += 1
-      state = initialReaderState()
-      appLayer = 'view-select'
-      bodyPage = 0
-      galleryImageIndex = 0
-      threadReturnBodyPage = 0
-      loadingProgress = null
-      profileState = null
-      profileBodyPage = 0
-      menuOpen = false
-      menuError = null
-      await render()
-    })
+  void (async () => {
+    const savedDraft = await persistGatewayUrlDraft(candidate.gatewayUrl)
+    gatewayFormState = commitGatewayUrlDraft(gatewayFormState, savedDraft)
+    const saved = await saveGatewaySettings(
+      gatewayStore,
+      { ...candidate, gatewayUrl: savedDraft },
+      verifyGatewayConnection,
+    )
+    gatewaySettings = saved
+    gatewayFormState = commitGatewayUrlDraft(gatewayFormState, saved.gatewayUrl)
+    configureApi(saved)
+    saveBrowserAccessToken(saved.accessToken)
+    legacyBrowserAccessToken = saved.accessToken
+    await persistBrowserSettingsFallback(saved)
+    tokenInput.value = ''
+    if (message) message.textContent = `Connected to ${saved.gatewayUrl}. Settings were saved.`
+    stateRevision += 1
+    profileRevision += 1
+    state = initialReaderState()
+    appLayer = 'view-select'
+    bodyPage = 0
+    galleryImageIndex = 0
+    threadReturnBodyPage = 0
+    loadingProgress = null
+    profileState = null
+    profileBodyPage = 0
+    menuOpen = false
+    menuError = null
+    await render()
+  })()
     .catch((error: unknown) => {
       if (message) {
         message.textContent = error instanceof Error ? error.message : 'Gateway connection failed.'
@@ -909,9 +950,8 @@ element('forget-device')?.addEventListener('click', () => {
       gatewayUrl: gatewaySettings.gatewayUrl,
       accessToken: null,
     })
-    if (gatewayStore !== browserGatewayStore) {
-      await writeGatewaySettings(browserGatewayStore, gatewaySettings)
-    }
+    gatewayFormState = commitGatewayUrlDraft(gatewayFormState, gatewaySettings.gatewayUrl ?? '')
+    await persistBrowserSettingsFallback(gatewaySettings)
     configureApi(null)
     const message = element('pairing-message')
     if (message) message.textContent = 'Saved access key removed. Enter a key to reconnect.'
@@ -939,7 +979,14 @@ updatePhone()
 async function startGlasses(): Promise<void> {
   const bridge = await waitForEvenAppBridge()
   gatewayStore = nativeSettingsStore(bridge)
-  gatewaySettings = await loadGatewaySettings(gatewayStore, browserGatewayStore)
+  const [storedGatewaySettings, storedGatewayUrlDraft] = await Promise.all([
+    loadGatewaySettings(gatewayStore, browserGatewayStore),
+    loadGatewayUrlDraft(gatewayStore, browserGatewayStore),
+  ])
+  gatewaySettings = storedGatewaySettings
+  if (storedGatewayUrlDraft) {
+    gatewayFormState = commitGatewayUrlDraft(gatewayFormState, storedGatewayUrlDraft)
+  }
   configureApi(authenticatedGatewaySettings())
   updateGatewayControls()
   const renderedLengths = new Map<number, number>()

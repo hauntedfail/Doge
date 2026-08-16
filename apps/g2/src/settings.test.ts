@@ -1,8 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  GATEWAY_SETTINGS_KEY,
+  GATEWAY_URL_DRAFT_KEY,
+  loadGatewayUrlDraft,
   loadGatewaySettings,
+  nativeSettingsStore,
   normaliseGatewayUrl,
   saveGatewaySettings,
+  writeGatewayUrlDraft,
   type GatewaySettings,
   type SettingsStore,
 } from './settings.js'
@@ -92,6 +97,17 @@ describe('gateway settings', () => {
     expect(JSON.parse(store.value())).toEqual(candidate)
   })
 
+  it('retains previously saved settings when validation of an edit fails', async () => {
+    const previous = { gatewayUrl: 'https://saved.example', accessToken: token }
+    const store = memoryStore(JSON.stringify(previous))
+    const candidate = { gatewayUrl: 'https://offline.example', accessToken: token }
+
+    await expect(saveGatewaySettings(store, candidate, async () => false)).rejects.toThrow(
+      'Gateway authentication failed',
+    )
+    expect(JSON.parse(store.value())).toEqual(previous)
+  })
+
   it('rejects an access key without a gateway URL', async () => {
     const store = memoryStore()
 
@@ -99,5 +115,51 @@ describe('gateway settings', () => {
       saveGatewaySettings(store, { gatewayUrl: null, accessToken: token }, vi.fn()),
     ).rejects.toThrow('Gateway URL')
     expect(store.value()).toBe('')
+  })
+
+  it('persists a normalised URL draft independently of authenticated settings', async () => {
+    const values = new Map<string, string>()
+    const store: SettingsStore = {
+      get: vi.fn(async (key) => values.get(key) ?? ''),
+      set: vi.fn(async (key, value) => {
+        values.set(key, value)
+        return true
+      }),
+    }
+
+    await expect(writeGatewayUrlDraft(store, 'https://draft.example/')).resolves.toBe(
+      'https://draft.example',
+    )
+    expect(values.get(GATEWAY_URL_DRAFT_KEY)).toBe('https://draft.example')
+    expect(values.has(GATEWAY_SETTINGS_KEY)).toBe(false)
+  })
+
+  it('restores a URL draft from native storage and migrates a WebView fallback', async () => {
+    const primary = {
+      get: vi.fn(async () => ''),
+      set: vi.fn(async () => true),
+    }
+    const fallback = {
+      get: vi.fn(async (key: string) =>
+        key === GATEWAY_URL_DRAFT_KEY ? 'https://draft.example/' : '',
+      ),
+      set: vi.fn(async () => true),
+    }
+
+    await expect(loadGatewayUrlDraft(primary, fallback)).resolves.toBe('https://draft.example')
+    expect(primary.set).toHaveBeenCalledWith(GATEWAY_URL_DRAFT_KEY, 'https://draft.example')
+  })
+
+  it('uses the Even SDK local-storage methods for persistent settings', async () => {
+    const storage = {
+      getLocalStorage: vi.fn(async () => 'stored'),
+      setLocalStorage: vi.fn(async () => true),
+    }
+    const store = nativeSettingsStore(storage)
+
+    await expect(store.get(GATEWAY_SETTINGS_KEY)).resolves.toBe('stored')
+    await expect(store.set(GATEWAY_SETTINGS_KEY, 'next')).resolves.toBe(true)
+    expect(storage.getLocalStorage).toHaveBeenCalledWith(GATEWAY_SETTINGS_KEY)
+    expect(storage.setLocalStorage).toHaveBeenCalledWith(GATEWAY_SETTINGS_KEY, 'next')
   })
 })

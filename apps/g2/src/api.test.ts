@@ -55,6 +55,20 @@ describe('API loading progress', () => {
     await expect(verifyGatewayConnection(configuredGateway)).resolves.toBe(false)
   })
 
+  it('distinguishes authentication rejection from an unavailable Gateway', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(null, { status: 401 })),
+    )
+    await expect(verifyGatewayConnection(configuredGateway)).resolves.toBe(false)
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(null, { status: 530 })),
+    )
+    await expect(verifyGatewayConnection(configuredGateway)).rejects.toThrow('HTTP 530')
+  })
+
   it('does not resurrect a browser token when runtime settings explicitly have no key', async () => {
     const legacyToken = 'B'.repeat(43)
     vi.stubGlobal('window', {
