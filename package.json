@@ -21,7 +21,6 @@
     "preview:live": "node scripts/start-live-preview.mjs",
     "production:key": "node scripts/copy-production-key.mjs",
     "production:start": "node scripts/start-doge-production.mjs",
-    "configure:origin": "node scripts/configure-origin.mjs",
     "relay:check": "node scripts/check-safe-relay.mjs",
     "relay:login": "node scripts/start-safe-relay.mjs",
     "relay:sync": "node scripts/sync-relay-catalog.mjs",

@@ -15,13 +15,20 @@ const storage = {
 }
 
 describe('API loading progress', () => {
+  const configuredGateway = {
+    gatewayUrl: 'https://doge.example',
+    accessToken: 'A'.repeat(43),
+  }
+
   afterEach(() => {
     configureApi(null)
     vi.unstubAllGlobals()
   })
 
   it('verifies a configured gateway without fetching an X timeline', async () => {
-    const fetchMock = vi.fn(async () => Response.json({ ok: true }))
+    const fetchMock = vi.fn(async () =>
+      Response.json({ ok: true, protocol: 'doge-gateway', apiVersion: 1 }),
+    )
     vi.stubGlobal('fetch', fetchMock)
 
     await expect(
@@ -37,6 +44,15 @@ describe('API loading progress', () => {
         headers: expect.objectContaining({ authorization: `Bearer ${'A'.repeat(43)}` }),
       }),
     )
+  })
+
+  it('rejects an unrelated server even when the session URL returns HTTP 200', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => Response.json({ ok: true })),
+    )
+
+    await expect(verifyGatewayConnection(configuredGateway)).resolves.toBe(false)
   })
 
   it('does not resurrect a browser token when runtime settings explicitly have no key', async () => {
@@ -74,6 +90,7 @@ describe('API loading progress', () => {
         }),
       ),
     )
+    configureApi(configuredGateway)
     const stages: DataLoadStage[] = []
 
     const page = await loadTimeline('home', undefined, (stage) => {
@@ -94,6 +111,7 @@ describe('API loading progress', () => {
       Response.json({ feed: 'home', posts: [], nextCursor: null }),
     )
     vi.stubGlobal('fetch', fetchMock)
+    configureApi(configuredGateway)
 
     await loadTimeline('home', undefined, undefined, ['11', '22'])
 
@@ -110,6 +128,7 @@ describe('API loading progress', () => {
       'fetch',
       vi.fn(async () => new Response(new Blob(['image']))),
     )
+    configureApi(configuredGateway)
     const stages: string[] = []
 
     const image = await loadPostImage('https://pbs.twimg.com/media/example.jpg', (stage) => {
@@ -145,6 +164,7 @@ describe('API loading progress', () => {
       }),
     )
     vi.stubGlobal('fetch', fetchMock)
+    configureApi(configuredGateway)
 
     const page = await loadProfile('ada', 'next-page')
 
@@ -153,5 +173,14 @@ describe('API loading progress', () => {
       '/api/v1/users/ada/profile?cursor=next-page',
     )
     await expect(loadProfile('not-valid!')).rejects.toThrow('Invalid X handle')
+  })
+
+  it('does not send requests until a gateway has been paired', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    configureApi(null)
+
+    await expect(loadTimeline('home')).rejects.toThrow('Configure Gateway')
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })

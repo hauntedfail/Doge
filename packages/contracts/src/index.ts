@@ -3,6 +3,13 @@ import { z } from 'zod'
 export const feedSchema = z.enum(['home', 'following', 'bookmarks'])
 export type Feed = z.infer<typeof feedSchema>
 
+export const gatewaySessionSchema = z.object({
+  ok: z.literal(true),
+  protocol: z.literal('doge-gateway'),
+  apiVersion: z.literal(1),
+})
+export type GatewaySession = z.infer<typeof gatewaySessionSchema>
+
 export const reactionSchema = z.enum(['like', 'repost', 'bookmark'])
 export type Reaction = z.infer<typeof reactionSchema>
 

@@ -25,7 +25,7 @@ twitter_api_safe_relay :6900 (localhost only)
 - `apps/g2` — Even Hub SDK、576×288 glasses UI、投稿者icon・投稿画像、iPhone companion UI
 - `apps/gateway` — Hono/Node.js gateway、固定reaction routes、Xレスポンス正規化、avatar・投稿画像proxy
 - `packages/contracts` — frontendとgatewayで共有するZod schema
-- `scripts` — relay catalog同期とproduction origin生成
+- `scripts` — relay catalog同期、preview、maintainer用deployment
 
 ## 操作
 
@@ -67,6 +67,8 @@ npm run dev
 ```
 
 gatewayは`http://127.0.0.1:8787`、Viteは`http://127.0.0.1:5173`で起動します。iPhone側画面はVite URL、Even Hub simulatorにも同じVite URLを指定してください。
+
+初回はphone画面のGateway settingsへ`http://127.0.0.1:8787`と43文字の開発用access keyを入力して`Save and test connection`を押します。認証に成功した組だけが保存され、以後は自動復元されます。
 
 検証とpackaging:
 
@@ -119,24 +121,36 @@ Safe Relayへログイン済みで、`npm run build`と`npm run relay:sync`が�
 npm run preview:live
 ```
 
-このcommandは256-bitの一時tokenを生成し、Bearer認証を必須にしたscoped gatewayと使い捨てCloudflare Quick Tunnelを起動します。tokenはterminalへ出力せず、権限`600`の一時QR画像にだけ埋め込みます。URL fragmentはCloudflareへ送られず、Even WebViewがsession内でtokenを取り込み、API requestのAuthorization headerへ変換します。`Ctrl-C`でgatewayとTunnelを終了し、QR画像を削除してtokenを失効させます。
+このcommandは256-bitの一時tokenを生成し、Bearer認証を必須にしたscoped gatewayと使い捨てCloudflare Quick Tunnelを起動します。tokenはterminalへ出力せず、権限`600`の一時QR画像にだけ埋め込みます。URL fragmentはCloudflareへ送られません。phone画面でQRと同じHTTPS originをGateway URLとして保存・検証すると、以後のAPI requestへAuthorization headerが付与されます。`Ctrl-C`でgatewayとTunnelを終了し、QR画像を削除してtokenを失効させます。
 
 Quick Tunnelは実機開発専用で、可用性保証や固定URLはありません。本番運用では`doge.h1ka.ru`のnamed Tunnelを使います。
 
-## Doge本番構成
+## Public buildとGateway pairing
 
-本番originは`https://doge.h1ka.ru`です。manifestとfrontend環境を再生成する場合:
+public buildは特定のGateway URLを含みません。Even Hub manifestはuserがphone画面で選ぶ任意のHTTPS serviceへの通信を許可し、Dogeは次の順序でpairingします。
+
+1. userがGatewayのHTTPS URLと43文字のaccess keyを入力
+2. DogeがBearer key付きで`GET /api/v1/session`を呼ぶ
+3. 認証済みDoge Gateway protocol v1応答を確認
+4. 成功したURLとkeyの組だけをEven App SDKのdevice local storageへ保存
+5. 次回起動時は保存値を復元し、同じsession endpointで再確認
+
+未設定時にtimelineやmedia requestは送信しません。keyを変更するときだけ新しい値を入力し、空欄なら保存済みkeyを維持します。`Forget access key`はURLを入力欄へ残したままkeyを削除します。旧WebView storageに保存済みのURL＋keyも初回にdevice storageへ移行します。
+
+公開packageを作る場合:
 
 ```bash
-npm run configure:origin -- https://doge.h1ka.ru
-npm run build
+npm run verify
 npm run pack:g2:production
 ```
 
-このコマンドはGit管理外の次の2ファイルを生成します。
+`apps/g2/app.production.json`はGit管理し、network whitelistを`https://`に固定します。build時環境変数、配布package、frontend sourceのいずれにも運用者のGateway URLやaccess keyを埋め込みません。Gateway実装の互換contractは[`docs/gateway-protocol.md`](docs/gateway-protocol.md)です。
 
-- `apps/g2/.env.production.local` — frontendのgateway origin
-- `apps/g2/app.production.json` — Even Hub network whitelist
+各userはこのcontractを実装したGatewayをHTTPSで公開し、phone画面からpairingします。X cookieはGateway hostから出ません。
+
+## Maintainer deployment
+
+このrepositoryのmaintainer用named Tunnelは現在`https://doge.h1ka.ru`を使います。これはserver運用scriptの設定であり、Doge public buildのdefault接続先ではありません。
 
 Cloudflare Tunnelで公開するのはgatewayの`127.0.0.1:8787`だけです。Safe Relayのport `6900`はTunnelへ接続しません。
 
@@ -146,9 +160,7 @@ Cloudflare Tunnelで公開するのはgatewayの`127.0.0.1:8787`だけです。S
 npm run production:key
 ```
 
-Even AppのDoge画面でGateway URLとkeyを入力し、`Save and test connection`を押します。認証確認に成功した設定だけをEven App SDKのdevice local storageへ保存し、次回起動時は保存済み設定で自動接続します。従来のWebView local storageにあるkeyも初回に移行します。keyを変更するときだけ新しい値を入力し、空欄なら保存済みkeyを維持します。`Forget access key`でdevice storageからも削除できます。X cookieはMacから出ません。
-
-Gateway URLはphone画面で編集できますが、Even Hubのnetwork permissionはbuild時の完全一致origin allowlistです。wildcardは使えないため、公開buildは`https://doge.h1ka.ru`だけに接続できます。別originを運用する場合は、そのoriginをmanifestへ含めた別buildを作るか、公開版の後続versionでallowlistへ追加してください。
+Even AppのDoge画面で`https://doge.h1ka.ru`とkeyを入力し、`Save and test connection`を押します。
 
 Safe Relayが起動中であることを確認して本番gatewayとnamed Tunnelを起動します。
 

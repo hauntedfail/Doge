@@ -1,4 +1,5 @@
 import {
+  gatewaySessionSchema,
   reactionResultSchema,
   profilePageSchema,
   threadSchema,
@@ -10,8 +11,6 @@ import {
   type Thread,
   type TimelinePage,
 } from '@even-g2-x-reader/contracts'
-import { browserAccessToken } from './auth.js'
-
 export interface ApiConfiguration {
   gatewayUrl: string
   accessToken: string | null
@@ -30,14 +29,12 @@ export function configureApi(configuration: ApiConfiguration | null): void {
 
 function apiBase(): string {
   if (runtimeConfiguration) return runtimeConfiguration.gatewayUrl.replace(/\/$/u, '')
-  const configured = import.meta.env.VITE_API_BASE_URL?.trim()
-  if (configured) return configured.replace(/\/$/u, '')
-  return window.location.port === '5173' ? 'http://127.0.0.1:8787' : window.location.origin
+  throw new Error('Configure Gateway on this phone before opening a view.')
 }
 
 function authorisedHeaders(accept: string): Headers {
   const headers = new Headers({ accept })
-  const accessToken = runtimeConfiguration ? runtimeConfiguration.accessToken : browserAccessToken()
+  const accessToken = runtimeConfiguration?.accessToken
   if (accessToken) headers.set('authorization', `Bearer ${accessToken}`)
   return headers
 }
@@ -52,7 +49,8 @@ export async function verifyGatewayConnection(configuration: ApiConfiguration): 
     credentials: 'omit',
     headers,
   })
-  return response.ok
+  if (!response.ok) return false
+  return gatewaySessionSchema.safeParse(await response.json()).success
 }
 
 async function get(path: string, onProgress?: DataLoadProgress): Promise<unknown> {

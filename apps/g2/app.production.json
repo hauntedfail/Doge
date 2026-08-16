@@ -10,7 +10,7 @@
     {
       "name": "network",
       "desc": "Access online services selected by the user.",
-      "whitelist": ["http://127.0.0.1:8787"]
+      "whitelist": ["https://"]
     }
   ],
   "supported_languages": ["en", "ja"]

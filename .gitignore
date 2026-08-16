@@ -33,4 +33,3 @@ cloudflared/
 cert.pem
 *.json.credentials
 *.credentials.json
-apps/g2/app.production.json

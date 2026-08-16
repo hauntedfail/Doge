@@ -3,12 +3,18 @@ export const GATEWAY_SETTINGS_KEY = 'doge-gateway-settings-v1'
 const ACCESS_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/u
 
 export interface GatewaySettings {
-  gatewayUrl: string
+  gatewayUrl: string | null
   accessToken: string | null
 }
 
 export interface AuthenticatedGatewaySettings extends GatewaySettings {
+  gatewayUrl: string
   accessToken: string
+}
+
+export const EMPTY_GATEWAY_SETTINGS: GatewaySettings = {
+  gatewayUrl: null,
+  accessToken: null,
 }
 
 export interface SettingsStore {
@@ -46,13 +52,16 @@ export function normaliseGatewayUrl(value: string): string {
 function normaliseSettings(value: unknown): GatewaySettings | null {
   if (!value || typeof value !== 'object') return null
   const candidate = value as Partial<GatewaySettings>
-  if (typeof candidate.gatewayUrl !== 'string') return null
   if (
     candidate.accessToken !== null &&
     (typeof candidate.accessToken !== 'string' || !ACCESS_TOKEN_PATTERN.test(candidate.accessToken))
   ) {
     return null
   }
+  if (candidate.gatewayUrl === null) {
+    return candidate.accessToken == null ? { ...EMPTY_GATEWAY_SETTINGS } : null
+  }
+  if (typeof candidate.gatewayUrl !== 'string') return null
   try {
     return {
       gatewayUrl: normaliseGatewayUrl(candidate.gatewayUrl),
@@ -88,13 +97,12 @@ export async function writeGatewaySettings(
 export async function loadGatewaySettings(
   primary: SettingsStore,
   fallback: SettingsStore | undefined,
-  defaults: GatewaySettings,
 ): Promise<GatewaySettings> {
   const native = await readSettings(primary)
   if (native) return native
 
-  const migrated = (await readSettings(fallback)) ?? normaliseSettings(defaults)
-  if (!migrated) throw new Error('Default Gateway settings are invalid.')
+  const migrated = await readSettings(fallback)
+  if (!migrated) return { ...EMPTY_GATEWAY_SETTINGS }
   try {
     await writeGatewaySettings(primary, migrated)
   } catch {
@@ -110,6 +118,7 @@ export async function saveGatewaySettings(
   validate: (settings: AuthenticatedGatewaySettings) => Promise<boolean>,
 ): Promise<AuthenticatedGatewaySettings> {
   const normalised = normaliseSettings(candidate)
+  if (!normalised?.gatewayUrl) throw new Error('Enter the Gateway URL.')
   if (!normalised?.accessToken) throw new Error('Enter the 43-character Doge access key.')
   if (!(await validate(normalised as AuthenticatedGatewaySettings))) {
     throw new Error('Gateway authentication failed. Existing settings were kept.')

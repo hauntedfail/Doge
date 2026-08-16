@@ -29,12 +29,17 @@ describe('gateway settings', () => {
     }
     const primary = memoryStore(JSON.stringify(stored))
 
-    await expect(
-      loadGatewaySettings(primary, undefined, {
-        gatewayUrl: 'https://doge.h1ka.ru',
-        accessToken: null,
-      }),
-    ).resolves.toEqual(stored)
+    await expect(loadGatewaySettings(primary, undefined)).resolves.toEqual(stored)
+  })
+
+  it('starts unconfigured instead of injecting a build-time gateway', async () => {
+    const primary = memoryStore()
+
+    await expect(loadGatewaySettings(primary, undefined)).resolves.toEqual({
+      gatewayUrl: null,
+      accessToken: null,
+    })
+    expect(primary.value()).toBe('')
   })
 
   it('migrates a valid WebView fallback into native storage', async () => {
@@ -43,10 +48,7 @@ describe('gateway settings', () => {
       JSON.stringify({ gatewayUrl: 'https://relay.example/', accessToken: token }),
     )
 
-    const loaded = await loadGatewaySettings(primary, fallback, {
-      gatewayUrl: 'https://doge.h1ka.ru',
-      accessToken: null,
-    })
+    const loaded = await loadGatewaySettings(primary, fallback)
 
     expect(loaded).toEqual({ gatewayUrl: 'https://relay.example', accessToken: token })
     expect(JSON.parse(primary.value())).toEqual(loaded)
@@ -61,16 +63,14 @@ describe('gateway settings', () => {
       JSON.stringify({ gatewayUrl: 'https://relay.example', accessToken: token }),
     )
 
-    await expect(
-      loadGatewaySettings(primary, fallback, {
-        gatewayUrl: 'https://doge.h1ka.ru',
-        accessToken: null,
-      }),
-    ).resolves.toEqual({ gatewayUrl: 'https://relay.example', accessToken: token })
+    await expect(loadGatewaySettings(primary, fallback)).resolves.toEqual({
+      gatewayUrl: 'https://relay.example',
+      accessToken: token,
+    })
   })
 
   it('accepts HTTPS origins and local HTTP development origins only', () => {
-    expect(normaliseGatewayUrl(' https://doge.h1ka.ru/ ')).toBe('https://doge.h1ka.ru')
+    expect(normaliseGatewayUrl(' https://gateway.example/ ')).toBe('https://gateway.example')
     expect(normaliseGatewayUrl('http://127.0.0.1:8787')).toBe('http://127.0.0.1:8787')
     expect(() => normaliseGatewayUrl('http://doge.example')).toThrow('HTTPS')
     expect(() => normaliseGatewayUrl('https://user:pass@doge.example')).toThrow('origin')
@@ -90,5 +90,14 @@ describe('gateway settings', () => {
     const accept = vi.fn(async () => true)
     await expect(saveGatewaySettings(store, candidate, accept)).resolves.toEqual(candidate)
     expect(JSON.parse(store.value())).toEqual(candidate)
+  })
+
+  it('rejects an access key without a gateway URL', async () => {
+    const store = memoryStore()
+
+    await expect(
+      saveGatewaySettings(store, { gatewayUrl: null, accessToken: token }, vi.fn()),
+    ).rejects.toThrow('Gateway URL')
+    expect(store.value()).toBe('')
   })
 })

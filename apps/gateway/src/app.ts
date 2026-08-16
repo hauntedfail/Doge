@@ -1,6 +1,7 @@
 import { timingSafeEqual } from 'node:crypto'
 import {
   feedSchema,
+  gatewaySessionSchema,
   profilePageSchema,
   reactionResultSchema,
   reactionSchema,
@@ -70,7 +71,9 @@ export function createApp(options: AppOptions): Hono {
   })
 
   app.get('/health', (context) => context.json({ ok: true }))
-  app.get('/api/v1/session', (context) => context.json({ ok: true }))
+  app.get('/api/v1/session', (context) =>
+    context.json(gatewaySessionSchema.parse({ ok: true, protocol: 'doge-gateway', apiVersion: 1 })),
+  )
   app.get('/api/v1/timeline', async (context) => {
     const query = timelineQuery.safeParse(context.req.query())
     if (!query.success) {

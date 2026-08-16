@@ -47,6 +47,23 @@ function source(): TimelineSource {
 }
 
 describe('gateway', () => {
+  it('identifies the authenticated Doge Gateway protocol during pairing', async () => {
+    const app = createApp({
+      source: source(),
+      bearerToken: undefined,
+      allowedOrigins: [],
+    })
+
+    const response = await app.request('/api/v1/session')
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({
+      ok: true,
+      protocol: 'doge-gateway',
+      apiVersion: 1,
+    })
+  })
+
   it('only exposes validated read routes', async () => {
     const timelineSource = source()
     const app = createApp({ source: timelineSource, bearerToken: undefined, allowedOrigins: [] })

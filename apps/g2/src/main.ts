@@ -79,11 +79,12 @@ import { initialProfileState, reduceProfileState, type ProfileState } from './pr
 import { reactionMenuItems, reactionSelection } from './reaction-menu.js'
 import {
   browserSettingsStore,
+  EMPTY_GATEWAY_SETTINGS,
   loadGatewaySettings,
   nativeSettingsStore,
-  normaliseGatewayUrl,
   saveGatewaySettings,
   writeGatewaySettings,
+  type AuthenticatedGatewaySettings,
   type GatewaySettings,
   type SettingsStore,
 } from './settings.js'
@@ -212,17 +213,11 @@ let profileState: ProfileState | null = null
 let profileBodyPage = 0
 let profileRevision = 0
 
-const defaultGatewayUrl = normaliseGatewayUrl(
-  import.meta.env.VITE_API_BASE_URL?.trim() ||
-    (window.location.port === '5173' ? 'http://127.0.0.1:8787' : window.location.origin),
-)
 const browserGatewayStore = browserSettingsStore(window.localStorage)
+let legacyBrowserAccessToken = browserAccessToken()
 let gatewayStore: SettingsStore = browserGatewayStore
-let gatewaySettings: GatewaySettings = {
-  gatewayUrl: defaultGatewayUrl,
-  accessToken: browserAccessToken(),
-}
-configureApi(gatewaySettings)
+let gatewaySettings: GatewaySettings = { ...EMPTY_GATEWAY_SETTINGS }
+configureApi(null)
 
 type ReaderCommand = SwipeDirection | 'confirm' | 'toggle-detail'
 
@@ -233,9 +228,19 @@ function element(id: string): HTMLElement | null {
 function updateGatewayControls(): void {
   const gatewayInput = element('gateway-url')
   if (gatewayInput instanceof HTMLInputElement && document.activeElement !== gatewayInput) {
-    gatewayInput.value = gatewaySettings.gatewayUrl
+    gatewayInput.value = gatewaySettings.gatewayUrl ?? ''
+  }
+  const settingsPanel = element('gateway-settings')
+  if (settingsPanel instanceof HTMLDetailsElement && !authenticatedGatewaySettings()) {
+    settingsPanel.open = true
   }
   element('forget-device')?.toggleAttribute('hidden', !gatewaySettings.accessToken)
+}
+
+function authenticatedGatewaySettings(): AuthenticatedGatewaySettings | null {
+  return gatewaySettings.gatewayUrl && gatewaySettings.accessToken
+    ? { gatewayUrl: gatewaySettings.gatewayUrl, accessToken: gatewaySettings.accessToken }
+    : null
 }
 
 function feedLabel(): string {
@@ -305,6 +310,20 @@ function updatePhone(): void {
   const post = activePost()
   const connection = element('connection')
   if (appLayer === 'view-select') {
+    if (!authenticatedGatewaySettings()) {
+      if (connection) {
+        connection.textContent = 'Gateway setup required'
+        connection.dataset.state = 'error'
+      }
+      if (element('feed')) element('feed')!.textContent = 'SETUP REQUIRED'
+      if (element('author')) element('author')!.textContent = 'Open Gateway settings'
+      if (element('post')) {
+        element('post')!.textContent = 'Enter your HTTPS URL and access key, then save and test.'
+      }
+      if (element('position'))
+        element('position')!.textContent = 'Settings are saved after authentication'
+      return
+    }
     if (connection) {
       connection.textContent = 'Choose a view on G2'
       connection.dataset.state = 'ready'
@@ -484,6 +503,11 @@ async function loadCurrentFeed(operation: LoadingOperation = 'initial'): Promise
 }
 
 async function openView(feed: (typeof VIEW_OPTIONS)[number]['feed']): Promise<void> {
+  if (!authenticatedGatewaySettings()) {
+    updatePhone()
+    await render()
+    return
+  }
   stateRevision += 1
   profileRevision += 1
   appLayer = 'reader'
@@ -838,7 +862,7 @@ element('pairing')?.addEventListener('submit', (event) => {
   }
   const candidate = {
     gatewayUrl: gatewayInput.value,
-    accessToken: tokenInput.value.trim() || gatewaySettings.accessToken,
+    accessToken: tokenInput.value.trim() || gatewaySettings.accessToken || legacyBrowserAccessToken,
   }
   if (saveButton instanceof HTMLButtonElement) saveButton.disabled = true
   if (message) message.textContent = 'Testing Gateway authentication…'
@@ -847,6 +871,7 @@ element('pairing')?.addEventListener('submit', (event) => {
       gatewaySettings = saved
       configureApi(saved)
       saveBrowserAccessToken(saved.accessToken)
+      legacyBrowserAccessToken = saved.accessToken
       if (gatewayStore !== browserGatewayStore) {
         await writeGatewaySettings(browserGatewayStore, saved)
       }
@@ -879,6 +904,7 @@ element('pairing')?.addEventListener('submit', (event) => {
 element('forget-device')?.addEventListener('click', () => {
   void (async () => {
     clearBrowserAccessToken()
+    legacyBrowserAccessToken = null
     gatewaySettings = await writeGatewaySettings(gatewayStore, {
       gatewayUrl: gatewaySettings.gatewayUrl,
       accessToken: null,
@@ -886,7 +912,7 @@ element('forget-device')?.addEventListener('click', () => {
     if (gatewayStore !== browserGatewayStore) {
       await writeGatewaySettings(browserGatewayStore, gatewaySettings)
     }
-    configureApi(gatewaySettings)
+    configureApi(null)
     const message = element('pairing-message')
     if (message) message.textContent = 'Saved access key removed. Enter a key to reconnect.'
     stateRevision += 1
@@ -913,8 +939,8 @@ updatePhone()
 async function startGlasses(): Promise<void> {
   const bridge = await waitForEvenAppBridge()
   gatewayStore = nativeSettingsStore(bridge)
-  gatewaySettings = await loadGatewaySettings(gatewayStore, browserGatewayStore, gatewaySettings)
-  configureApi(gatewaySettings)
+  gatewaySettings = await loadGatewaySettings(gatewayStore, browserGatewayStore)
+  configureApi(authenticatedGatewaySettings())
   updateGatewayControls()
   const renderedLengths = new Map<number, number>()
   const avatarCache = new Map<string, Promise<Uint8Array>>()
@@ -1082,26 +1108,44 @@ async function startGlasses(): Promise<void> {
       }),
     })
 
-  const selectionPage = () => ({
-    pageKind: 'view-select' as const,
-    textObject: [
-      textContainer(
-        VIEW_TITLE_ID,
-        VIEW_TITLE_NAME,
-        VIEW_TITLE_X,
-        8,
-        VIEW_TITLE_WIDTH,
-        34,
-        1,
-        VIEW_TITLE,
-      ),
-    ],
-    imageObject: [],
-    listObject: [viewList()],
-    menuSignature: '',
-    image: null,
-    embeddedMedia: null,
-  })
+  const selectionPage = () => {
+    const paired = authenticatedGatewaySettings() !== null
+    return {
+      pageKind: 'view-select' as const,
+      textObject: [
+        textContainer(
+          VIEW_TITLE_ID,
+          VIEW_TITLE_NAME,
+          VIEW_TITLE_X,
+          8,
+          VIEW_TITLE_WIDTH,
+          34,
+          1,
+          VIEW_TITLE,
+        ),
+        ...(paired
+          ? []
+          : [
+              textContainer(
+                LOADING_STATUS_ID,
+                LOADING_STATUS_NAME,
+                48,
+                96,
+                480,
+                96,
+                2,
+                'SET UP GATEWAY ON PHONE\nHTTPS URL + ACCESS KEY',
+                1,
+              ),
+            ]),
+      ],
+      imageObject: [],
+      listObject: paired ? [viewList()] : [],
+      menuSignature: paired ? 'gateway-paired' : 'gateway-unpaired',
+      image: null,
+      embeddedMedia: null,
+    }
+  }
 
   const centredLoadingText = (
     containerID: number,
@@ -1944,8 +1988,9 @@ async function startGlasses(): Promise<void> {
       .catch((error: unknown) => console.error(error))
   })
   await render()
-  if (gatewaySettings.accessToken) {
-    void verifyGatewayConnection(gatewaySettings)
+  const savedGateway = authenticatedGatewaySettings()
+  if (savedGateway) {
+    void verifyGatewayConnection(savedGateway)
       .then((connected) => {
         const message = element('pairing-message')
         if (message) {
