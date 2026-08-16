@@ -135,7 +135,7 @@ public buildは特定のGateway URLを含みません。Even Hub manifestはuser
 4. 成功したURLとkeyの組だけをEven App SDKのdevice local storageへ保存
 5. 次回起動時は保存値を復元し、同じsession endpointで再確認
 
-未設定時にtimelineやmedia requestは送信しません。Gateway URLの入力draftは接続成否にかかわらずEven SDK storageへ別keyで保持し、失敗後や再起動後も入力欄へ復元します。access keyは認証成功後だけURLと組にして保存します。keyを変更するときだけ新しい値を入力し、空欄なら保存済みkeyを維持します。`Forget access key`はURLを入力欄へ残したままkeyを削除します。旧WebView storageに保存済みのURL＋keyも初回にdevice storageへ移行します。
+未設定時にtimelineやmedia requestは送信しません。Gateway URLの入力draftは接続成否にかかわらずEven SDK storageへ別keyで保持し、失敗後や再起動後も入力欄へ復元します。access keyは認証成功後に専用のEven SDK storage keyへ保存し、書き戻し確認が成功してから接続済みとして扱います。起動時はdevice storageの復元が完了するまで設定操作を無効化し、保存済みURL＋keyがあれば再入力なしで起動します。keyを変更するときだけ新しい値を入力し、空欄なら保存済みkeyを維持します。password欄が空でも`Saved access key is active`と表示されていればkeyは非表示のまま有効です。`Forget access key`はURLを入力欄へ残したままkeyを削除します。旧WebView storageまたは旧形式に保存済みのURL＋keyも初回にdevice storageへ移行します。
 
 公開packageを作る場合:
 

@@ -26,3 +26,7 @@ export function gatewayUrlInputValue(
 ): string {
   return state.gatewayUrlDraft ?? savedGatewayUrl ?? ''
 }
+
+export function shouldDisableGatewaySave(storageReady: boolean, saveInFlight: boolean): boolean {
+  return !storageReady || saveInFlight
+}

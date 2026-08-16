@@ -4,6 +4,7 @@ import {
   commitGatewayUrlDraft,
   gatewayUrlInputValue,
   initialGatewayFormState,
+  shouldDisableGatewaySave,
 } from './gateway-form.js'
 
 describe('Gateway URL form state', () => {
@@ -27,5 +28,11 @@ describe('Gateway URL form state', () => {
     const committed = commitGatewayUrlDraft(entered, 'https://doge.example')
 
     expect(gatewayUrlInputValue(committed, null)).toBe('https://doge.example')
+  })
+
+  it('does not allow saving before Even SDK storage is ready', () => {
+    expect(shouldDisableGatewaySave(false, false)).toBe(true)
+    expect(shouldDisableGatewaySave(true, false)).toBe(false)
+    expect(shouldDisableGatewaySave(true, true)).toBe(true)
   })
 })

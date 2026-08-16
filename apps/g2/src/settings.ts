@@ -1,5 +1,6 @@
 export const GATEWAY_SETTINGS_KEY = 'doge-gateway-settings-v1'
 export const GATEWAY_URL_DRAFT_KEY = 'doge-gateway-url-draft-v1'
+export const GATEWAY_ACCESS_KEY_KEY = 'doge-gateway-access-key-v1'
 
 const ACCESS_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/u
 
@@ -93,6 +94,70 @@ async function readGatewayUrlDraft(store: SettingsStore | undefined): Promise<st
   }
 }
 
+async function readGatewayAccessKey(store: SettingsStore | undefined): Promise<string | null> {
+  if (!store) return null
+  try {
+    const value = await store.get(GATEWAY_ACCESS_KEY_KEY)
+    return ACCESS_TOKEN_PATTERN.test(value) ? value : null
+  } catch {
+    return null
+  }
+}
+
+export async function writeGatewayAccessKey(
+  store: SettingsStore,
+  accessToken: string,
+): Promise<string> {
+  const normalised = accessToken.trim()
+  if (!ACCESS_TOKEN_PATTERN.test(normalised)) {
+    throw new Error('Enter the 43-character Doge access key.')
+  }
+  if (!(await store.set(GATEWAY_ACCESS_KEY_KEY, normalised))) {
+    throw new Error('The Even app could not save the access key.')
+  }
+  const persisted = await readGatewayAccessKey(store)
+  if (persisted !== normalised) {
+    throw new Error('The Even app could not verify the saved access key.')
+  }
+  return normalised
+}
+
+export async function clearGatewayAccessKey(store: SettingsStore): Promise<void> {
+  if (!(await store.set(GATEWAY_ACCESS_KEY_KEY, ''))) {
+    throw new Error('The Even app could not remove the access key.')
+  }
+}
+
+export async function loadGatewayAccessKey(
+  primary: SettingsStore,
+  fallback: SettingsStore | undefined,
+): Promise<string | null> {
+  const native = await readGatewayAccessKey(primary)
+  if (native) return native
+
+  const migrated = await readGatewayAccessKey(fallback)
+  if (!migrated) return null
+  try {
+    await writeGatewayAccessKey(primary, migrated)
+  } catch {
+    // Keep using the WebView fallback for this session and retry native migration next launch.
+  }
+  return migrated
+}
+
+export function restoreGatewaySettings(
+  settings: GatewaySettings,
+  gatewayUrlDraft: string | null,
+  accessToken: string | null,
+): GatewaySettings {
+  const gatewayUrl = settings.gatewayUrl ?? gatewayUrlDraft
+  if (!gatewayUrl) return { ...EMPTY_GATEWAY_SETTINGS }
+  return {
+    gatewayUrl,
+    accessToken: accessToken ?? settings.accessToken,
+  }
+}
+
 export async function writeGatewayUrlDraft(
   store: SettingsStore,
   gatewayUrl: string,
@@ -162,6 +227,7 @@ export async function saveGatewaySettings(
   if (!(await validate(normalised as AuthenticatedGatewaySettings))) {
     throw new Error('Gateway authentication failed. Existing settings were kept.')
   }
+  await writeGatewayAccessKey(store, normalised.accessToken)
   await writeGatewaySettings(store, normalised)
   return normalised as AuthenticatedGatewaySettings
 }

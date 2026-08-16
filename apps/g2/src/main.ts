@@ -45,6 +45,7 @@ import {
   commitGatewayUrlDraft,
   gatewayUrlInputValue,
   initialGatewayFormState,
+  shouldDisableGatewaySave,
 } from './gateway-form.js'
 import { LruPromiseCache } from './image-cache.js'
 import { classifyInput, type SwipeDirection } from './input.js'
@@ -85,11 +86,15 @@ import { initialProfileState, reduceProfileState, type ProfileState } from './pr
 import { reactionMenuItems, reactionSelection } from './reaction-menu.js'
 import {
   browserSettingsStore,
+  clearGatewayAccessKey,
   EMPTY_GATEWAY_SETTINGS,
+  loadGatewayAccessKey,
   loadGatewayUrlDraft,
   loadGatewaySettings,
   nativeSettingsStore,
+  restoreGatewaySettings,
   saveGatewaySettings,
+  writeGatewayAccessKey,
   writeGatewayUrlDraft,
   writeGatewaySettings,
   type AuthenticatedGatewaySettings,
@@ -226,6 +231,8 @@ let legacyBrowserAccessToken = browserAccessToken()
 let gatewayStore: SettingsStore = browserGatewayStore
 let gatewaySettings: GatewaySettings = { ...EMPTY_GATEWAY_SETTINGS }
 let gatewayFormState = initialGatewayFormState()
+let gatewayStorageReady = false
+let gatewaySaveInFlight = false
 configureApi(null)
 
 type ReaderCommand = SwipeDirection | 'confirm' | 'toggle-detail'
@@ -239,8 +246,22 @@ function updateGatewayControls(): void {
   if (gatewayInput instanceof HTMLInputElement && document.activeElement !== gatewayInput) {
     gatewayInput.value = gatewayUrlInputValue(gatewayFormState, gatewaySettings.gatewayUrl)
   }
+  const tokenInput = element('access-key')
+  if (tokenInput instanceof HTMLInputElement) {
+    tokenInput.placeholder = gatewaySettings.accessToken
+      ? 'Saved access key is active'
+      : 'Enter the 43-character access key'
+  }
+  const saveButton = element('save-gateway')
+  if (saveButton instanceof HTMLButtonElement) {
+    saveButton.disabled = shouldDisableGatewaySave(gatewayStorageReady, gatewaySaveInFlight)
+  }
   const settingsPanel = element('gateway-settings')
-  if (settingsPanel instanceof HTMLDetailsElement && !authenticatedGatewaySettings()) {
+  if (
+    settingsPanel instanceof HTMLDetailsElement &&
+    gatewayStorageReady &&
+    !authenticatedGatewaySettings()
+  ) {
     settingsPanel.open = true
   }
   element('forget-device')?.toggleAttribute('hidden', !gatewaySettings.accessToken)
@@ -268,6 +289,11 @@ async function persistBrowserSettingsFallback(settings: GatewaySettings): Promis
   if (gatewayStore === browserGatewayStore) return
   try {
     await writeGatewaySettings(browserGatewayStore, settings)
+    if (settings.accessToken) {
+      await writeGatewayAccessKey(browserGatewayStore, settings.accessToken)
+    } else {
+      await clearGatewayAccessKey(browserGatewayStore)
+    }
   } catch (error) {
     console.warn('Unable to update the WebView Gateway settings fallback', error)
   }
@@ -340,6 +366,17 @@ function updatePhone(): void {
   const post = activePost()
   const connection = element('connection')
   if (appLayer === 'view-select') {
+    if (!gatewayStorageReady) {
+      if (connection) {
+        connection.textContent = 'Restoring saved connection…'
+        connection.dataset.state = 'loading'
+      }
+      if (element('feed')) element('feed')!.textContent = 'RESTORING'
+      if (element('author')) element('author')!.textContent = 'Even SDK storage'
+      if (element('post')) element('post')!.textContent = 'Loading saved Gateway and access key.'
+      if (element('position')) element('position')!.textContent = 'Please wait'
+      return
+    }
     if (!authenticatedGatewaySettings()) {
       if (connection) {
         connection.textContent = 'Gateway setup required'
@@ -890,9 +927,12 @@ element('pairing')?.addEventListener('submit', (event) => {
   event.preventDefault()
   const tokenInput = element('access-key')
   const gatewayInput = element('gateway-url')
-  const saveButton = element('save-gateway')
   const message = element('pairing-message')
   if (!(tokenInput instanceof HTMLInputElement) || !(gatewayInput instanceof HTMLInputElement)) {
+    return
+  }
+  if (!gatewayStorageReady) {
+    if (message) message.textContent = 'Waiting for Even SDK storage. Try again in a moment.'
     return
   }
   gatewayFormState = captureGatewayUrlDraft(gatewayFormState, gatewayInput.value)
@@ -900,7 +940,8 @@ element('pairing')?.addEventListener('submit', (event) => {
     gatewayUrl: gatewayUrlInputValue(gatewayFormState, gatewaySettings.gatewayUrl),
     accessToken: tokenInput.value.trim() || gatewaySettings.accessToken || legacyBrowserAccessToken,
   }
-  if (saveButton instanceof HTMLButtonElement) saveButton.disabled = true
+  gatewaySaveInFlight = true
+  updateGatewayControls()
   if (message) message.textContent = 'Testing Gateway authentication…'
   void (async () => {
     const savedDraft = await persistGatewayUrlDraft(candidate.gatewayUrl)
@@ -938,7 +979,7 @@ element('pairing')?.addEventListener('submit', (event) => {
       }
     })
     .finally(() => {
-      if (saveButton instanceof HTMLButtonElement) saveButton.disabled = false
+      gatewaySaveInFlight = false
       updateGatewayControls()
     })
 })
@@ -950,6 +991,7 @@ element('forget-device')?.addEventListener('click', () => {
       gatewayUrl: gatewaySettings.gatewayUrl,
       accessToken: null,
     })
+    await clearGatewayAccessKey(gatewayStore)
     gatewayFormState = commitGatewayUrlDraft(gatewayFormState, gatewaySettings.gatewayUrl ?? '')
     await persistBrowserSettingsFallback(gatewaySettings)
     configureApi(null)
@@ -979,15 +1021,40 @@ updatePhone()
 async function startGlasses(): Promise<void> {
   const bridge = await waitForEvenAppBridge()
   gatewayStore = nativeSettingsStore(bridge)
-  const [storedGatewaySettings, storedGatewayUrlDraft] = await Promise.all([
+  const [storedGatewaySettings, storedGatewayUrlDraft, storedAccessKey] = await Promise.all([
     loadGatewaySettings(gatewayStore, browserGatewayStore),
     loadGatewayUrlDraft(gatewayStore, browserGatewayStore),
+    loadGatewayAccessKey(gatewayStore, browserGatewayStore),
   ])
-  gatewaySettings = storedGatewaySettings
+  gatewaySettings = restoreGatewaySettings(
+    storedGatewaySettings,
+    storedGatewayUrlDraft,
+    storedAccessKey,
+  )
+  if (gatewaySettings.gatewayUrl && gatewaySettings.accessToken) {
+    if (storedAccessKey !== gatewaySettings.accessToken) {
+      try {
+        await writeGatewayAccessKey(gatewayStore, gatewaySettings.accessToken)
+      } catch (error) {
+        console.warn('Unable to migrate the saved access key into dedicated SDK storage', error)
+      }
+    }
+    if (
+      storedGatewaySettings.gatewayUrl !== gatewaySettings.gatewayUrl ||
+      storedGatewaySettings.accessToken !== gatewaySettings.accessToken
+    ) {
+      try {
+        await writeGatewaySettings(gatewayStore, gatewaySettings)
+      } catch (error) {
+        console.warn('Unable to synchronise restored Gateway settings', error)
+      }
+    }
+  }
   if (storedGatewayUrlDraft) {
     gatewayFormState = commitGatewayUrlDraft(gatewayFormState, storedGatewayUrlDraft)
   }
   configureApi(authenticatedGatewaySettings())
+  gatewayStorageReady = true
   updateGatewayControls()
   const renderedLengths = new Map<number, number>()
   const avatarCache = new Map<string, Promise<Uint8Array>>()

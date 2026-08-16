@@ -1,11 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  GATEWAY_ACCESS_KEY_KEY,
   GATEWAY_SETTINGS_KEY,
   GATEWAY_URL_DRAFT_KEY,
+  loadGatewayAccessKey,
   loadGatewayUrlDraft,
   loadGatewaySettings,
   nativeSettingsStore,
   normaliseGatewayUrl,
+  restoreGatewaySettings,
   saveGatewaySettings,
   writeGatewayUrlDraft,
   type GatewaySettings,
@@ -15,14 +18,15 @@ import {
 const token = 'A'.repeat(43)
 
 function memoryStore(initial = ''): SettingsStore & { value: () => string } {
-  let value = initial
+  const values = new Map<string, string>()
+  if (initial) values.set(GATEWAY_SETTINGS_KEY, initial)
   return {
-    get: vi.fn(async () => value),
-    set: vi.fn(async (_key, next) => {
-      value = next
+    get: vi.fn(async (key) => values.get(key) ?? ''),
+    set: vi.fn(async (key, next) => {
+      values.set(key, next)
       return true
     }),
-    value: () => value,
+    value: () => values.get(GATEWAY_SETTINGS_KEY) ?? '',
   }
 }
 
@@ -95,6 +99,7 @@ describe('gateway settings', () => {
     const accept = vi.fn(async () => true)
     await expect(saveGatewaySettings(store, candidate, accept)).resolves.toEqual(candidate)
     expect(JSON.parse(store.value())).toEqual(candidate)
+    await expect(store.get(GATEWAY_ACCESS_KEY_KEY)).resolves.toBe(token)
   })
 
   it('retains previously saved settings when validation of an edit fails', async () => {
@@ -161,5 +166,65 @@ describe('gateway settings', () => {
     await expect(store.set(GATEWAY_SETTINGS_KEY, 'next')).resolves.toBe(true)
     expect(storage.getLocalStorage).toHaveBeenCalledWith(GATEWAY_SETTINGS_KEY)
     expect(storage.setLocalStorage).toHaveBeenCalledWith(GATEWAY_SETTINGS_KEY, 'next')
+  })
+
+  it('restores the access key from its dedicated Even SDK storage key', async () => {
+    const primary = {
+      get: vi.fn(async (key: string) => (key === GATEWAY_ACCESS_KEY_KEY ? token : '')),
+      set: vi.fn(async () => true),
+    }
+
+    await expect(loadGatewayAccessKey(primary, undefined)).resolves.toBe(token)
+    expect(primary.get).toHaveBeenCalledWith(GATEWAY_ACCESS_KEY_KEY)
+  })
+
+  it('migrates a dedicated WebView access-key fallback into Even SDK storage', async () => {
+    const primary = {
+      get: vi.fn(async () => ''),
+      set: vi.fn(async () => true),
+    }
+    const fallback = {
+      get: vi.fn(async (key: string) => (key === GATEWAY_ACCESS_KEY_KEY ? token : '')),
+      set: vi.fn(async () => true),
+    }
+
+    await expect(loadGatewayAccessKey(primary, fallback)).resolves.toBe(token)
+    expect(primary.set).toHaveBeenCalledWith(GATEWAY_ACCESS_KEY_KEY, token)
+  })
+
+  it('restores a connection from the URL draft and dedicated access-key storage', () => {
+    expect(
+      restoreGatewaySettings(
+        { gatewayUrl: null, accessToken: null },
+        'https://draft.example',
+        token,
+      ),
+    ).toEqual({ gatewayUrl: 'https://draft.example', accessToken: token })
+  })
+
+  it('prefers the dedicated access-key storage over a legacy combined value', () => {
+    const currentToken = 'B'.repeat(43)
+
+    expect(
+      restoreGatewaySettings(
+        { gatewayUrl: 'https://doge.example', accessToken: token },
+        null,
+        currentToken,
+      ),
+    ).toEqual({ gatewayUrl: 'https://doge.example', accessToken: currentToken })
+  })
+
+  it('restores a verified URL and access key after a simulated app restart', async () => {
+    const deviceStorage = memoryStore()
+    const candidate = { gatewayUrl: 'https://doge.example', accessToken: token }
+
+    await saveGatewaySettings(deviceStorage, candidate, async () => true)
+
+    const restored = restoreGatewaySettings(
+      await loadGatewaySettings(deviceStorage, undefined),
+      null,
+      await loadGatewayAccessKey(deviceStorage, undefined),
+    )
+    expect(restored).toEqual(candidate)
   })
 })
