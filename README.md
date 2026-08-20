@@ -27,6 +27,19 @@ twitter_api_safe_relay :6900 (localhost only)
 - `packages/contracts` — frontendとgatewayで共有するZod schema
 - `scripts` — relay catalog同期、preview、maintainer用deployment
 
+## Agent harness
+
+このrepositoryはCodex、Claude Code、GitHub Copilotなど特定vendorに依存しないrepository-native harnessを備えています。agentは最初に[`AGENTS.md`](AGENTS.md)と[`docs/INDEX.md`](docs/INDEX.md)を読み、変更対象に応じてpackage-local `AGENTS.md`へ進みます。設計意図は[`docs/agent-harness.md`](docs/agent-harness.md)にあります。
+
+検証の定義はagent用proseではなくnpm scriptsとCIへ集約しています。
+
+```bash
+npm run verify          # format、repo invariants、types、tests、build
+npm run verify:release  # 上記＋production EHPK＋artifact境界検査
+```
+
+GitHub Actionsもclean checkoutから同じ`npm run verify:release`を実行します。長期的に残す未完了事項だけを[`Backlog.md`](Backlog.md)へ記録し、session logや一時planには使いません。
+
 ## 操作
 
 起動直後はHome、Following、Bookmarksのview選択画面です。
@@ -53,7 +66,7 @@ G2のscrollはcontentを引っ張るnatural/inverse方式ではありません�
 
 ## 必要環境
 
-- Node.js 22以降
+- Node.js 22以降（agentとCIの標準versionは`.node-version`に固定）
 - Even Hub対応のEven Appとpairing済みEven G2
 - live X利用時のみ、別途起動した`twitter_api_safe_relay`とログイン済みbrowser profile
 

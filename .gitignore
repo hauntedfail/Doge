@@ -20,6 +20,7 @@ browser-profile/
 user-data-dir/
 
 # Tool caches and local editor state
+.cache/
 .vite/
 .vitest/
 .idea/

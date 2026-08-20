@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "license": "AGPL-3.0-only",
+  "packageManager": "npm@11.12.1",
   "type": "module",
   "workspaces": [
     "apps/*",
@@ -11,6 +12,7 @@
   "scripts": {
     "build": "npm run build --workspace @even-g2-x-reader/contracts && npm run build --workspace @even-g2-x-reader/gateway && npm run build --workspace @even-g2-x-reader/g2",
     "check": "npm run check --workspaces --if-present",
+    "ci": "npm audit --audit-level=high && npm run verify:release",
     "dev": "npm-run-all --parallel dev:gateway dev:g2",
     "dev:g2": "npm run dev --workspace @even-g2-x-reader/g2",
     "dev:gateway": "npm run dev --workspace @even-g2-x-reader/gateway",
@@ -26,7 +28,10 @@
     "relay:sync": "node scripts/sync-relay-catalog.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
-    "verify": "npm run check && npm test && npm run build"
+    "verify": "npm run format:check && npm run verify:repo && npm run check && npm test && npm run build",
+    "verify:artifact": "node scripts/check-production-artifact.mjs",
+    "verify:release": "npm run verify && npm run pack:g2:production && npm run verify:artifact",
+    "verify:repo": "node scripts/check-repository.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
