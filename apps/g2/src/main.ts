@@ -40,6 +40,7 @@ import {
   type EmbeddedMediaTileData,
 } from './embedded-media.js'
 import { galleryTitle, slideGalleryIndex } from './gallery.js'
+import { footerPositionContent, READER_FOOTER_WIDTH } from './footer-position.js'
 import {
   captureGatewayUrlDraft,
   commitGatewayUrlDraft,
@@ -173,8 +174,8 @@ const AUTHOR_Y = 2
 const AVATAR_Y = 4
 const BODY_Y = 64
 const PLAIN_BODY_HEIGHT = 190
-const POSITION_X = 478
-const POSITION_WIDTH = 90
+const POSITION_X = 8
+const POSITION_WIDTH = READER_FOOTER_WIDTH
 
 const ACTION_MENU_BACKGROUND_CONFIG = [
   {
@@ -1402,7 +1403,7 @@ async function startGlasses(): Promise<void> {
               POSITION_WIDTH,
               28,
               12,
-              sections.position,
+              footerPositionContent(sections.pagePosition, sections.position),
             ),
           ]
         : []),

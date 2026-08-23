@@ -44,21 +44,21 @@ GitHub Actionsもclean checkoutから同じ`npm run verify:release`を実行し�
 
 起動直後はHome、Following、Bookmarksのview選択画面です。
 
-| 場所        | 入力       | 動作                              |
-| ----------- | ---------- | --------------------------------- |
-| view選択    | scroll     | Home / Following / Bookmarks選択  |
-| view選択    | tap        | 選択したviewを開く                |
-| view選択    | double tap | Dogeを終了                        |
-| 投稿view    | 上スワイプ | 本文の続き / 読了後に次の投稿     |
-| 投稿view    | 下スワイプ | 本文の前ページ / 前の投稿         |
-| 投稿view    | tap        | 右側のaction menuを開く           |
-| 投稿view    | double tap | view選択へ戻る                    |
-| action menu | scroll     | Like / Repost / Bookmark / thread |
-| action menu | tap        | 選択を実行し、成功後menuを閉じる  |
+| 場所        | 入力       | 動作                               |
+| ----------- | ---------- | ---------------------------------- |
+| view選択    | scroll     | Home / Following / Bookmarks選択   |
+| view選択    | tap        | 選択したviewを開く                 |
+| view選択    | double tap | Dogeを終了                         |
+| 投稿view    | 上スワイプ | 本文をnative scroll / 読了後に次へ |
+| 投稿view    | 下スワイプ | 本文をnative scroll / 境界で前へ   |
+| 投稿view    | tap        | 右側のaction menuを開く            |
+| 投稿view    | double tap | view選択へ戻る                     |
+| action menu | scroll     | Like / Repost / Bookmark / thread  |
+| action menu | tap        | 選択を実行し、成功後menuを閉じる   |
 
 G2のscrollはcontentを引っ張るnatural/inverse方式ではありません。投稿viewでは、進みたい方向へ指をslideします（下方向で次の本文page／post、上方向で前の本文page／post）。view選択とaction menuはG2 native listのscrollに従います。
 
-長い本文はG2の実フォント幅に合わせてページ分割し、文字を省略しません。G2画面内には常設の操作guideを置かず、その領域も本文とview選択listに使います。画像付きpostでは、本文末尾の同じtimeline frame内に1〜4枚を縦横比を維持したgridとして埋め込みます。本文が短いほど画像領域を大きく取り、各slotは取得中だけ独立したloading placeholderを表示します。Galleryは画像だけを最大表示する別modeです。動画・animated GIFは静止posterを再生マーク付きで表示し、動画データの取得・再生は行いません。
+長い本文は1行ごとの再描画をせず、G2 firmwareの`TextContainer` overflow scrollで連続的に読みます。SDKのrebuild上限を超える本文だけを最大1000文字のchunkへ分割し、文字は省略しません。複数chunkのpostでは左下にchunk位置、右下にtimeline内のpost位置を表示します。G2画面内には常設の操作guideを置かず、その領域も本文とview選択listに使います。画像付きpostでは、本文末尾の文書blockとして1〜4枚を縦横比を維持したgridで表示します。本文が短いほど画像領域を大きく取り、各slotは取得中だけ独立したloading placeholderを表示します。Galleryは画像だけを最大表示する別modeです。動画・animated GIFは静止posterを再生マーク付きで表示し、動画データの取得・再生は行いません。
 
 取得済みmediaのBlobとG2用に変換済みのPNG tileはWebView memory内のLRU cacheへ短期間保持します。同じpostやGallery画像へ戻った場合はnetwork取得・decode・再変換を省略します。ただしEven SDKには眼鏡側の画像cacheをIDで再利用するAPIがないため、page rebuild後のBLE再送自体は必要です。icon、投稿者画像、投稿画像はG2 bridgeへencoded PNG/JPEGのbyte列として順番に渡します。高速にpostやviewを切り替えた場合、古いavatar取得結果は破棄し、最新renderだけをimage containerへ反映します。
 
