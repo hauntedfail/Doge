@@ -20,7 +20,7 @@ const posts = ['1', '2'].map((id) => ({
 }))
 
 describe('reader state', () => {
-  it('moves forward on swipe-up and back on swipe-down', () => {
+  it('moves forward on next and back on previous', () => {
     let state = reduceReaderState(initialReaderState(), {
       type: 'timeline-loaded',
       posts,

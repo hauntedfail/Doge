@@ -79,6 +79,8 @@ describe('scrollPostBody', () => {
 
     expect(chunks.map(({ body: chunk }) => chunk).join('')).toBe(body)
     expect(chunks.every((chunk) => !chunk.body.includes('\uFFFD'))).toBe(true)
+    expect(chunks.every((chunk) => !/[\uD800-\uDBFF]$/u.test(chunk.body))).toBe(true)
+    expect(chunks.every((chunk) => !/^[\uDC00-\uDFFF]/u.test(chunk.body))).toBe(true)
     expect(chunks.every((chunk) => chunk.body.length <= POST_BODY_CHUNK_MAX_CHARACTERS)).toBe(true)
   })
 })
