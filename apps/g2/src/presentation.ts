@@ -5,6 +5,7 @@ import type { ReaderState } from './reader-state.js'
 
 export interface GlassesSections {
   position: string
+  pagePosition: string
   author: string
   body: string
   avatarUrl: string | null
@@ -60,6 +61,7 @@ function postSections(post: Post, state: ReaderState, requestedPosition: number)
     `${clean(post.authorName)}\n@${clean(post.authorHandle)}  ${date(post.createdAt)}`.trim()
   return {
     position: `${state.index + 1}/${state.posts.length}`,
+    pagePosition: frames.length > 1 ? `${bodyPage + 1}/${frames.length}` : '',
     author,
     body: displayFrame.body,
     avatarUrl: post.authorAvatarUrl,
@@ -88,6 +90,7 @@ export function renderGlassesSections(
   if (state.status === 'error') {
     return {
       position: '',
+      pagePosition: '',
       author: '',
       body: `Unable to load the timeline.\n${clean(state.error ?? 'Unknown error')}`,
       avatarUrl: null,
@@ -107,6 +110,7 @@ export function renderGlassesSections(
     )
     return {
       position: '',
+      pagePosition: '',
       author: '',
       body: indicator.text,
       avatarUrl: null,
@@ -125,6 +129,7 @@ export function renderGlassesSections(
     ? postSections(post, state, bodyPage)
     : {
         position: '',
+        pagePosition: '',
         author: '',
         body: 'No posts found.',
         avatarUrl: null,

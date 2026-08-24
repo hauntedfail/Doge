@@ -40,6 +40,7 @@ import {
   type EmbeddedMediaTileData,
 } from './embedded-media.js'
 import { galleryTitle, slideGalleryIndex } from './gallery.js'
+import { footerPositionContent, READER_FOOTER_WIDTH } from './footer-position.js'
 import {
   captureGatewayUrlDraft,
   commitGatewayUrlDraft,
@@ -84,6 +85,11 @@ import { renderGlassesSections } from './presentation.js'
 import { profileSummary } from './profile-presentation.js'
 import { initialProfileState, reduceProfileState, type ProfileState } from './profile-state.js'
 import { reactionMenuItems, reactionSelection } from './reaction-menu.js'
+import {
+  prepareTextContainersForRebuild,
+  textContainersRequiringHydration,
+  TEXT_CONTAINER_UPGRADE_MAX_CHARACTERS,
+} from './text-container-lifecycle.js'
 import {
   browserSettingsStore,
   clearGatewayAccessKey,
@@ -173,8 +179,8 @@ const AUTHOR_Y = 2
 const AVATAR_Y = 4
 const BODY_Y = 64
 const PLAIN_BODY_HEIGHT = 190
-const POSITION_X = 478
-const POSITION_WIDTH = 90
+const POSITION_X = 8
+const POSITION_WIDTH = READER_FOOTER_WIDTH
 
 const ACTION_MENU_BACKGROUND_CONFIG = [
   {
@@ -1402,7 +1408,7 @@ async function startGlasses(): Promise<void> {
               POSITION_WIDTH,
               28,
               12,
-              sections.position,
+              footerPositionContent(sections.pagePosition, sections.position),
             ),
           ]
         : []),
@@ -1875,6 +1881,31 @@ async function startGlasses(): Promise<void> {
     }
   }
 
+  const upgradeTextObjects = async (textObject: readonly TextContainerProperty[]) => {
+    for (const text of textObject) {
+      const containerID = text.containerID ?? 0
+      const containerName = text.containerName ?? ''
+      const content = text.content ?? ''
+      if (content.length > TEXT_CONTAINER_UPGRADE_MAX_CHARACTERS) {
+        throw new Error(
+          `Text container ${containerName || containerID} exceeds the ${TEXT_CONTAINER_UPGRADE_MAX_CHARACTERS}-character upgrade limit`,
+        )
+      }
+      const upgraded = await bridge.textContainerUpgrade(
+        new TextContainerUpgrade({
+          containerID,
+          containerName,
+          contentOffset: 0,
+          contentLength: renderedLengths.get(containerID) ?? 0,
+          content,
+        }),
+      )
+      if (!upgraded) return false
+      renderedLengths.set(containerID, content.length)
+    }
+    return true
+  }
+
   const refreshReaderPageImages = async (
     sections: ReturnType<typeof renderGlassesSections>,
     force: boolean,
@@ -1890,6 +1921,7 @@ async function startGlasses(): Promise<void> {
 
   const initial = renderActiveSections()
   const initialPage = page(initial)
+  const initialTextObject = prepareTextContainersForRebuild(initialPage.textObject)
   const result = await bridge.createStartUpPageContainer(
     new CreateStartUpPageContainer({
       containerTotalNum:
@@ -1897,13 +1929,20 @@ async function startGlasses(): Promise<void> {
         initialPage.imageObject.length +
         initialPage.listObject.length,
       listObject: initialPage.listObject,
-      textObject: initialPage.textObject,
+      textObject: initialTextObject,
       imageObject: initialPage.imageObject,
     }),
   )
   if (result !== StartUpPageCreateResult.success)
     throw new Error(`Unable to create G2 page: ${result}`)
-  rememberTextLengths(initialPage.textObject)
+  rememberTextLengths(initialTextObject)
+  if (
+    !(await upgradeTextObjects(
+      textContainersRequiringHydration(initialPage.textObject, initialTextObject),
+    ))
+  ) {
+    throw new Error('Unable to hydrate startup text containers')
+  }
   renderedMenuSignature = initialPage.menuSignature
   renderedPageKind = initialPage.pageKind
   if (initialPage.pageKind === 'initial-loading') {
@@ -1920,37 +1959,28 @@ async function startGlasses(): Promise<void> {
     let needsRebuild =
       nextPage.pageKind !== renderedPageKind || nextPage.menuSignature !== renderedMenuSignature
     if (!needsRebuild && nextPage.pageKind !== 'gallery') {
-      for (const text of nextPage.textObject) {
-        const containerID = text.containerID ?? 0
-        const containerName = text.containerName ?? ''
-        const content = text.content ?? ''
-        const upgraded = await bridge.textContainerUpgrade(
-          new TextContainerUpgrade({
-            containerID,
-            containerName,
-            contentOffset: 0,
-            contentLength: renderedLengths.get(containerID) ?? 0,
-            content,
-          }),
-        )
-        if (!upgraded) {
-          needsRebuild = true
-          break
-        }
-        renderedLengths.set(containerID, content.length)
-      }
+      needsRebuild = !(await upgradeTextObjects(nextPage.textObject))
     }
     if (needsRebuild) {
-      await bridge.rebuildPageContainer(
+      const rebuildTextObject = prepareTextContainersForRebuild(nextPage.textObject)
+      const rebuilt = await bridge.rebuildPageContainer(
         new RebuildPageContainer({
           containerTotalNum:
             nextPage.textObject.length + nextPage.imageObject.length + nextPage.listObject.length,
           listObject: nextPage.listObject,
-          textObject: nextPage.textObject,
+          textObject: rebuildTextObject,
           imageObject: nextPage.imageObject,
         }),
       )
-      rememberTextLengths(nextPage.textObject)
+      if (!rebuilt) throw new Error(`Unable to rebuild ${nextPage.pageKind} page`)
+      rememberTextLengths(rebuildTextObject)
+      if (
+        !(await upgradeTextObjects(
+          textContainersRequiringHydration(nextPage.textObject, rebuildTextObject),
+        ))
+      ) {
+        throw new Error(`Unable to hydrate ${nextPage.pageKind} text containers`)
+      }
       renderedMenuSignature = nextPage.menuSignature
       renderedPageKind = nextPage.pageKind
       if (nextPage.pageKind === 'initial-loading') {

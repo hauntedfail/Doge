@@ -4,3 +4,4 @@
 - Install the Beta build from the iPhone Even App and pair the persistent Doge access key.
 - Validate background, phone-lock, and away-from-home behaviour on physical Even G2 hardware.
 - Validate avatar contrast and 48 px transfer latency on physical G2 hardware.
+- Validate firmware-native post scrolling, chunk-boundary navigation, and the text-to-media transition on physical G2 hardware.
