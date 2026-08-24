@@ -1,12 +1,12 @@
 import { getTextWidth } from '@evenrealities/pretext'
+import { TEXT_CONTAINER_UPGRADE_MAX_CHARACTERS } from './text-container-lifecycle.js'
 
 export const POST_BODY_WIDTH = 560
 export const PLAIN_BODY_LINES = 7
 export const EMBEDDED_MEDIA_BODY_LINES = 3
-// rebuildPageContainer accepts at most 1,000 characters per text container.
-// Keeping every chunk rebuild-safe lets the same document move between the
-// plain reader, embedded media, action menu, thread, and profile layouts.
-export const POST_BODY_CHUNK_MAX_CHARACTERS = 1000
+// textContainerUpgrade accepts up to 2,000 UTF-16 code units. Layout rebuilds
+// first create a rebuild-safe prefix, then hydrate the full chunk in place.
+export const POST_BODY_CHUNK_MAX_CHARACTERS = TEXT_CONTAINER_UPGRADE_MAX_CHARACTERS
 
 export interface PostDisplayFrame {
   body: string

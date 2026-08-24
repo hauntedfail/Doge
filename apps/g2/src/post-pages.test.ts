@@ -9,17 +9,21 @@ import {
 } from './post-pages.js'
 
 describe('scrollPostBody', () => {
+  it('uses the full text-upgrade allowance for native-scroll chunks', () => {
+    expect(POST_BODY_CHUNK_MAX_CHARACTERS).toBe(2000)
+  })
+
   it('uses the removed header space for seven text lines', () => {
     expect(PLAIN_BODY_LINES).toBe(7)
   })
 
   it('preserves every character in native-scroll chunks instead of one-line rolling frames', () => {
-    const body = '日本語とEnglish wordsを混ぜた長い本文。'.repeat(80)
+    const body = '日本語とEnglish wordsを混ぜた長い本文。'.repeat(160)
     const chunks = scrollPostBody(body, 0)
 
     expect(chunks.map(({ body: chunk }) => chunk).join('')).toBe(body)
     expect(chunks.length).toBeGreaterThan(1)
-    expect(chunks[0]?.body.length).toBeGreaterThan(500)
+    expect(chunks[0]?.body.length).toBeGreaterThan(1000)
     expect(chunks.every((chunk) => chunk.body.length <= POST_BODY_CHUNK_MAX_CHARACTERS)).toBe(true)
     expect(
       chunks

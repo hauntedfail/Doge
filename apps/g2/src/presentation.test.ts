@@ -3,7 +3,7 @@ import { renderGlassesSections, renderGlassesText } from './presentation.js'
 import { initialReaderState, reduceReaderState } from './reader-state.js'
 
 describe('renderGlassesText', () => {
-  it('fits the startup limit and strips display-hostile control characters', () => {
+  it('fits the text-upgrade limit and strips display-hostile control characters', () => {
     const post = {
       id: '1',
       authorName: 'Ada\u0000',
@@ -47,7 +47,7 @@ describe('renderGlassesText', () => {
     const sections = renderGlassesSections(state)
     expect(sections).toMatchObject({
       position: '1/1',
-      pagePosition: '1/4',
+      pagePosition: '1/3',
       author: expect.stringContaining('@ada'),
       avatarUrl: 'https://pbs.twimg.com/profile_images/1/ada_normal.jpg',
       postImageUrl: null,
@@ -63,7 +63,7 @@ describe('renderGlassesText', () => {
     })
     const finalSections = renderGlassesSections(state, sections.bodyPageCount - 1)
     expect(finalSections).toMatchObject({
-      pagePosition: '4/4',
+      pagePosition: '3/3',
       postImageUrl: 'https://pbs.twimg.com/media/Example123?format=jpg&name=small',
       postImageKind: 'video_thumbnail',
       postImageIndex: 0,
@@ -71,8 +71,8 @@ describe('renderGlassesText', () => {
     })
     expect(finalSections.postImages).toEqual(post.images)
     expect(finalSections.body.length).toBeGreaterThan(0)
-    expect(sections.bodyPageCount).toBe(4)
-    expect(sections.body.length).toBeLessThanOrEqual(1000)
+    expect(sections.bodyPageCount).toBe(3)
+    expect(sections.body.length).toBeLessThanOrEqual(2000)
     expect(sections.body).not.toMatch(/\b(?:RE|RP|LIKE|VIEW)\b/u)
     expect(sections).not.toHaveProperty('header')
     expect(sections).not.toHaveProperty('help')
