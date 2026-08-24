@@ -49,8 +49,8 @@ GitHub Actionsもclean checkoutから同じ`npm run verify:release`を実行し�
 | view選択    | scroll     | Home / Following / Bookmarks選択   |
 | view選択    | tap        | 選択したviewを開く                 |
 | view選択    | double tap | Dogeを終了                         |
-| 投稿view    | 上スワイプ | 本文をnative scroll / 読了後に次へ |
-| 投稿view    | 下スワイプ | 本文をnative scroll / 境界で前へ   |
+| 投稿view    | 下スワイプ | 本文をnative scroll / 読了後に次へ |
+| 投稿view    | 上スワイプ | 本文をnative scroll / 境界で前へ   |
 | 投稿view    | tap        | 右側のaction menuを開く            |
 | 投稿view    | double tap | view選択へ戻る                     |
 | action menu | scroll     | Like / Repost / Bookmark / thread  |
