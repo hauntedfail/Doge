@@ -49,6 +49,19 @@ describe('scrollPostBody', () => {
     expect(chunks.every((chunk) => chunk.body.length <= POST_BODY_CHUNK_MAX_CHARACTERS)).toBe(true)
   })
 
+  it('bounds visually short embedded-media tails by the SDK character limit', () => {
+    const visuallyShortOverflow = '\u0000'.repeat(POST_BODY_CHUNK_MAX_CHARACTERS + 37)
+    const body = `Visible line\n${visuallyShortOverflow}\nend`
+    const chunks = scrollPostBody(body, 1)
+    const finalChunk = chunks.at(-1)
+
+    expect(chunks.map(({ body: chunk }) => chunk).join('')).toBe(body)
+    expect(chunks.every((chunk) => chunk.body.length <= POST_BODY_CHUNK_MAX_CHARACTERS)).toBe(true)
+    expect(chunks.slice(0, -1).every((chunk) => !chunk.showMedia)).toBe(true)
+    expect(finalChunk).toBeDefined()
+    expect(finalChunk?.showMedia).toBe(true)
+  })
+
   it('uses a single viewport when the entire post already fits', () => {
     expect(scrollPostBody('Short post.', 0)).toEqual([{ body: 'Short post.', showMedia: false }])
   })

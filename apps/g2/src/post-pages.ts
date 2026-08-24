@@ -148,5 +148,14 @@ export function scrollPostBody(text: string, imageCount: number): PostDisplayFra
     body,
     showMedia: false,
   }))
-  return [...textChunks, { body: lines.slice(mediaLineStart).join(''), showMedia: true }]
+  const mediaTextChunks = chunkLines(lines.slice(mediaLineStart))
+  const boundedMediaTextChunks = mediaTextChunks.length > 0 ? mediaTextChunks : ['']
+  const finalMediaTextChunkIndex = boundedMediaTextChunks.length - 1
+  return [
+    ...textChunks,
+    ...boundedMediaTextChunks.map((body, index) => ({
+      body,
+      showMedia: index === finalMediaTextChunkIndex,
+    })),
+  ]
 }
