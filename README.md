@@ -31,8 +31,8 @@ remain online while you read.
 
 - **Three feeds, one reader.** Switch between Home, Following and Bookmarks;
   open a thread or an author's profile from any post.
-- **Full text.** Long posts are paginated using G2 font measurements, without
-  truncation.
+- **Full text.** Read long posts with firmware-native scrolling. Longer text is
+  split into bounded chunks without truncation.
 - **Images in context.** View up to four images alongside a post or open the
   gallery for a larger view. Videos and animated GIFs appear as still posters.
 - **Reactions on the glasses.** Like, repost and bookmark, or undo each action.

@@ -3,7 +3,7 @@ import { renderGlassesSections, renderGlassesText } from './presentation.js'
 import { initialReaderState, reduceReaderState } from './reader-state.js'
 
 describe('renderGlassesText', () => {
-  it('fits the startup limit and strips display-hostile control characters', () => {
+  it('fits the text-upgrade limit and strips display-hostile control characters', () => {
     const post = {
       id: '1',
       authorName: 'Ada\u0000',
@@ -40,7 +40,6 @@ describe('renderGlassesText', () => {
       nextCursor: null,
     })
     const output = renderGlassesText(state)
-    expect(output.length).toBeLessThanOrEqual(1000)
     expect(output).not.toContain('\u0000')
     expect(output).not.toContain('DOGE')
     expect(output).not.toContain('HOME')
@@ -48,6 +47,7 @@ describe('renderGlassesText', () => {
     const sections = renderGlassesSections(state)
     expect(sections).toMatchObject({
       position: '1/1',
+      pagePosition: '1/3',
       author: expect.stringContaining('@ada'),
       avatarUrl: 'https://pbs.twimg.com/profile_images/1/ada_normal.jpg',
       postImageUrl: null,
@@ -63,6 +63,7 @@ describe('renderGlassesText', () => {
     })
     const finalSections = renderGlassesSections(state, sections.bodyPageCount - 1)
     expect(finalSections).toMatchObject({
+      pagePosition: '3/3',
       postImageUrl: 'https://pbs.twimg.com/media/Example123?format=jpg&name=small',
       postImageKind: 'video_thumbnail',
       postImageIndex: 0,
@@ -70,7 +71,8 @@ describe('renderGlassesText', () => {
     })
     expect(finalSections.postImages).toEqual(post.images)
     expect(finalSections.body.length).toBeGreaterThan(0)
-    expect(sections.bodyPageCount).toBeGreaterThan(2)
+    expect(sections.bodyPageCount).toBe(3)
+    expect(sections.body.length).toBeLessThanOrEqual(2000)
     expect(sections.body).not.toMatch(/\b(?:RE|RP|LIKE|VIEW)\b/u)
     expect(sections).not.toHaveProperty('header')
     expect(sections).not.toHaveProperty('help')
@@ -93,5 +95,37 @@ describe('renderGlassesText', () => {
     expect(loading.body).toContain('45%')
     expect(loading.body).toContain('Receiving posts')
     expect(failed.body).toBe('Unable to load the timeline.\noffline')
+  })
+
+  it('omits the page count when a post has only one native-scroll chunk', () => {
+    const state = reduceReaderState(initialReaderState(), {
+      type: 'timeline-loaded',
+      posts: [
+        {
+          id: 'short',
+          authorName: 'Doge',
+          authorHandle: 'doge',
+          authorAvatarUrl: null,
+          text: 'A short post.',
+          createdAt: '2026-08-12T00:00:00.000Z',
+          replyCount: 0,
+          repostCount: 0,
+          likeCount: 0,
+          viewCount: 0,
+          bookmarkCount: 0,
+          viewerHasLiked: false,
+          viewerHasReposted: false,
+          viewerHasBookmarked: false,
+          images: [],
+        },
+      ],
+      nextCursor: null,
+    })
+
+    expect(renderGlassesSections(state)).toMatchObject({
+      position: '1/1',
+      pagePosition: '',
+      bodyPageCount: 1,
+    })
   })
 })

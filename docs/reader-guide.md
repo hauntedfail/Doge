@@ -5,20 +5,20 @@ begin reading.
 
 ## Controls
 
-| Context            | Input      | Action                                            |
-| ------------------ | ---------- | ------------------------------------------------- |
-| Feed selector      | Scroll     | Select Home, Following or Bookmarks               |
-| Feed selector      | Tap        | Open the selected feed                            |
-| Feed selector      | Double tap | Exit Doge                                         |
-| Post               | Swipe down | Advance to the next text page, then the next post |
-| Post               | Swipe up   | Return to the previous text page or post          |
-| Post               | Tap        | Open the action menu                              |
-| Timeline           | Double tap | Return to the feed selector                       |
-| Thread             | Double tap | Return to the previous reader view                |
-| Action menu        | Scroll     | Select an action                                  |
-| Action menu        | Tap        | Run the selected action                           |
-| Action menu        | Double tap | Close the menu                                    |
-| Gallery or profile | Double tap | Return to the reader                              |
+| Context            | Input      | Action                                                                  |
+| ------------------ | ---------- | ----------------------------------------------------------------------- |
+| Feed selector      | Scroll     | Select Home, Following or Bookmarks                                     |
+| Feed selector      | Tap        | Open the selected feed                                                  |
+| Feed selector      | Double tap | Exit Doge                                                               |
+| Post               | Swipe down | Scroll forwards; at the boundary, advance to the next chunk or post     |
+| Post               | Swipe up   | Scroll backwards; at the boundary, return to the previous chunk or post |
+| Post               | Tap        | Open the action menu                                                    |
+| Timeline           | Double tap | Return to the feed selector                                             |
+| Thread             | Double tap | Return to the previous reader view                                      |
+| Action menu        | Scroll     | Select an action                                                        |
+| Action menu        | Tap        | Run the selected action                                                 |
+| Action menu        | Double tap | Close the menu                                                          |
+| Gallery or profile | Double tap | Return to the reader                                                    |
 
 Post navigation follows the finger's direction: down advances and up goes back.
 It does not drag the content as a phone's natural scrolling would. The feed
@@ -31,14 +31,23 @@ thread. A successful reaction closes the menu.
 
 ## Text and images
 
-Long posts are paginated using the G2's measured font widths; text is not
-truncated. The display reserves its space for content rather than a permanent
-control guide.
+Long posts use the G2 firmware's native text-container overflow scrolling,
+without redrawing the text one line at a time. Text is split into chunks of at
+most 2,000 UTF-16 code units without truncation or splitting surrogate pairs.
+When creating or rebuilding a layout, Doge first supplies a prefix within the
+1,000-code-unit creation limit, then upgrades the container to the full chunk.
+
+For posts spanning multiple frames, the bottom-left indicator shows the current
+chunk or media-frame position; the bottom-right indicator shows the post's
+position in the timeline. The display reserves its space for content rather
+than a permanent control guide. Physical scrolling and boundary transitions
+still require the checks listed in [`Backlog.md`](../Backlog.md).
 
 Posts with images show one to four images in an aspect-ratio-preserving grid at
-the end of the text, within the same timeline frame. Shorter text leaves more
-room for images. Each image has its own loading placeholder. Gallery provides
-a separate, larger image view.
+the end of the post. The final text lines share a frame with the image grid;
+earlier text stays in scrollable chunks. Shorter text leaves more room for
+images. Each image has its own loading placeholder. Gallery provides a
+separate, larger image view.
 
 Videos and animated GIFs use still posters with a play indicator. Doge does not
 fetch or play video streams.
