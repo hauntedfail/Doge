@@ -13,7 +13,7 @@
   "dependencies": {
     "@even-g2-x-reader/contracts": "0.1.0",
     "@hono/node-server": "^2.1.0",
-    "hono": "^4.13.1",
+    "hono": "^4.13.5",
     "zod": "^4.4.3"
   }
 }
