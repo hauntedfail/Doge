@@ -32,7 +32,7 @@ switch package managers without an explicit migration task.
 ## Non-negotiable boundaries
 
 - Never commit or print X cookies, browser profiles, access keys, Cloudflare
-  credentials, relay catalogs, `.env` files, generated `dist/`, or `.ehpk` files.
+  credentials, relay catalogues, `.env` files, generated `dist/`, or `.ehpk` files.
 - Keep `twitter_api_safe_relay` loopback-only. Only the bearer-authenticated Doge
   gateway may be exposed through a tunnel.
 - Public G2 builds must not contain a maintainer Gateway URL or access key. Users
@@ -40,16 +40,18 @@ switch package managers without an explicit migration task.
 - Validate external data at boundaries using the shared contract. Do not pass
   raw X responses, cookies, or internal headers to the G2 client.
 - A build does not update a running production Gateway. Restart it, then verify
-  authenticated and tokenless behavior before claiming deployment success.
-- Simulator, package, Hub upload, and physical-glasses behavior are separate
+  authenticated and tokenless behaviour before claiming deployment success.
+- Simulator, package, Hub upload, and physical-glasses behaviour are separate
   evidence. State clearly which one was actually verified.
 
 ## Working agreement
 
 - Preserve unrelated changes and keep each change reviewable.
-- Add or update regression tests for behavior changes. Prefer observable
+- Write all maintained documentation in British English; follow the language
+  guidance in `docs/development.md`.
+- Add or update regression tests for behaviour changes. Prefer observable
   contract tests over implementation-detail assertions.
-- Run focused checks while iterating, then `npm run verify` before finalizing.
+- Run focused checks while iterating, then `npm run verify` before finalising.
 - For release-affecting changes, run `npm run verify:release` and report the
   package hash; never stage the generated package.
 - Record lasting architecture or operational knowledge in the owning document

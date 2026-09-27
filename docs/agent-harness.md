@@ -15,7 +15,7 @@ does not depend on a particular agent vendor or a hidden prompt bundle.
 4. **Fast feedback** — focused Vitest and workspace type/build commands support
    short edit-test loops.
 5. **Admission control** — `npm run verify` is the one baseline definition of
-   done; `npm run verify:release` adds package and artifact checks.
+   done; `npm run verify:release` adds package and artefact checks.
 6. **Independent enforcement** — GitHub Actions installs from the lockfile and
    invokes the same release verification command on a clean runner.
 7. **Reproducible dependencies** — `.node-version` and `packageManager` pin the
@@ -34,7 +34,7 @@ does not depend on a particular agent vendor or a hidden prompt bundle.
   as interchangeable.
 - The structure remains lightweight enough for this small monorepo. Add a new
   harness layer only after a measured failure shows that current tooling cannot
-  express or enforce the needed behavior.
+  express or enforce the needed behaviour.
 
 ## Maintenance rule
 

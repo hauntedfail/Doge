@@ -5,8 +5,11 @@ smallest relevant reading set instead of loading the entire repository history.
 
 ## Product and architecture
 
-- [`README.md`](../README.md) — product behavior, input model, development,
-  pairing, deployment, distribution, and security defaults.
+- [`README.md`](../README.md) — product overview, quick start and contribution
+  entry points.
+- [`reader-guide.md`](reader-guide.md) — controls, text, images and pairing.
+- [`security.md`](security.md) — authentication, relay restrictions and data
+  handling.
 - [`gateway-protocol.md`](gateway-protocol.md) — public Gateway protocol and
   compatibility contract.
 - [`../apps/g2/AGENTS.md`](../apps/g2/AGENTS.md) — G2/WebView implementation
@@ -18,11 +21,10 @@ smallest relevant reading set instead of loading the entire repository history.
 
 ## Operations
 
-- README “すぐ試す（mock）” — deterministic local startup.
-- README “live X relayへ切り替える” — login-bound Safe Relay workflow.
-- README “Maintainer deployment” — named Tunnel production operation.
-- README “Private buildとBeta build” — Even Hub distribution and device test
-  boundaries.
+- [`development.md`](development.md) — deterministic local startup, live X
+  relay setup, authenticated preview and verification.
+- [`deployment.md`](deployment.md) — HTTPS hosting, maintainer operation,
+  Even Hub distribution and device test boundaries.
 - [`.env.example`](../.env.example) — non-secret configuration names and safe
   loopback defaults.
 
@@ -31,7 +33,7 @@ smallest relevant reading set instead of loading the entire repository history.
 - `npm run verify` — formatting, repository invariants, TypeScript, all tests,
   and all builds. This is the required local and CI baseline.
 - `npm run verify:release` — baseline verification, production EHPK packaging,
-  and artifact boundary checks.
+  and artefact boundary checks.
 - [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) — clean-install CI
   using the same release verification entry point.
 - [`../Backlog.md`](../Backlog.md) — durable outcomes that still require real
@@ -39,7 +41,10 @@ smallest relevant reading set instead of loading the entire repository history.
 
 ## Knowledge ownership
 
-- Put current user-visible behavior and operator guidance in `README.md`.
+- Keep the product overview and quick start in `README.md`; put detailed reader,
+  development, deployment and security guidance in the linked guides above.
+- Write maintained documentation in British English. Preserve exact identifiers,
+  commands, UI labels and third-party legal text.
 - Put wire compatibility rules in `gateway-protocol.md` and executable schemas.
 - Put package-specific agent constraints in the nearest `AGENTS.md`.
 - Put durable unfinished outcomes in `Backlog.md`; keep it under 20 items.

@@ -7,7 +7,7 @@ G2 client and `twitter_api_safe_relay` on loopback.
 
 - Root `AGENTS.md` and `docs/INDEX.md`
 - `docs/gateway-protocol.md`
-- `README.md` sections “Security defaults” and “Maintainer deployment”
+- `docs/security.md` and `docs/deployment.md`
 
 ## Invariants
 
@@ -29,7 +29,7 @@ G2 client and `twitter_api_safe_relay` on loopback.
 - Focused route/security test: `npm test -- apps/gateway/src/<name>.test.ts`
 - Type check: `npm run check --workspace @even-g2-x-reader/gateway`
 - Build: `npm run build --workspace @even-g2-x-reader/gateway`
-- Run root `npm run verify` before finalizing.
+- Run root `npm run verify` before finalising.
 
 After production source changes, rebuilding is insufficient: restart
 `npm run production:start`, then verify authenticated `/api/v1/session` returns
