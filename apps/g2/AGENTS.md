@@ -6,8 +6,8 @@ The glasses UI is rendered through the Even Hub SDK, not through the phone DOM.
 ## Read first
 
 - Root `AGENTS.md` and `docs/INDEX.md`
-- `README.md` sections “操作”, “Public buildとGateway pairing”, and
-  “Private buildとBeta build”
+- `docs/reader-guide.md` for controls and pairing
+- `docs/deployment.md` for packaging and Even Hub testing
 - `app.json` and `app.production.json` before changing permissions or versions
 
 ## Invariants
