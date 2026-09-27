@@ -19,6 +19,10 @@ Doge brings Home, Following, Bookmarks, threads and profiles to the Even G2's
 576 × 288 display. Read full posts, browse images and manage reactions with the
 glasses' touch controls. An iPhone companion handles gateway pairing.
 
+For use on the glasses, you need an Even G2 paired with an Even Hub-compatible
+Even App on your iPhone. You can try the reader locally in the simulator without
+glasses or an X account.
+
 Live data comes from your own signed-in X browser session through a self-hosted
 gateway. No X API key is required. The Mac running the gateway and browser must
 remain online while you read.
@@ -44,24 +48,61 @@ remain online while you read.
 
 ## Quick start
 
-Use the Node.js version in [`.node-version`](.node-version) and the npm version
-pinned in [`package.json`](package.json). Run these commands from the repository
-root:
+This path runs the source checkout with mock data in the Even Hub simulator on
+**macOS**. You need Git, **Node.js 24.15.0** (see [`.node-version`](.node-version))
+and **npm 11.12.1** (pinned in [`package.json`](package.json)). `npm ci` installs
+the simulator alongside the app's other development dependencies. Ports 8787
+and 5173 must be available.
+
+Clone the repository and install its dependencies:
 
 ```sh
+git clone https://github.com/hauntedfail/Doge.git
+cd Doge
 npm ci
-export GATEWAY_BEARER_TOKEN="$(node -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("base64url"))')"
+```
+
+Once installation succeeds, create a temporary development key and start the
+mock gateway and companion in the same terminal:
+
+```sh
+export GATEWAY_BEARER_TOKEN="$(
+  node -p 'require("node:crypto").randomBytes(32).toString("base64url")'
+)"
 printf '%s' "$GATEWAY_BEARER_TOKEN" | pbcopy
-npm run dev
+X_SOURCE=mock npm run dev
 ```
 
 This starts the mock gateway at `http://127.0.0.1:8787` and the companion at
-`http://127.0.0.1:5173`. Open the companion in a desktop browser, or use the same
-Vite URL in the Even Hub simulator. Mock mode does not connect to X.
+`http://127.0.0.1:5173`. Keep this terminal running. The `pbcopy` command puts the
+key on the macOS clipboard without printing it. Keep it private; it is not an
+X API key.
 
-In **Gateway settings**, enter `http://127.0.0.1:8787`, paste the key and select
-**Save and test connection**. The `pbcopy` command copies the generated key to the
-macOS clipboard without printing it. Keep the key private; it is not an X API key.
+In a second terminal, change to the same `Doge` directory and launch the installed
+simulator:
+
+```sh
+npx --no-install evenhub-simulator http://127.0.0.1:5173
+```
+
+In the simulator's companion window:
+
+1. Open **Gateway settings**, enter `http://127.0.0.1:8787` and paste the key.
+2. Select **Save and test connection**. The confirmation should read
+   **Connected to http://127.0.0.1:8787. Settings were saved.**
+3. Select **Home** using the companion's test controls or the simulator's glasses
+   controls. The first post should read:
+
+   > Doge is running in mock mode with deterministic timeline data.
+
+A regular browser can show the companion layout, but it cannot complete pairing:
+settings wait for the Even SDK bridge supplied by the simulator or Even App.
+If **Save and test connection** stays disabled, check that you opened the URL in
+the simulator.
+
+To stop, quit the simulator and press `Ctrl-C` in the development terminal.
+Restarting from the same shell retains the development key; if you generate a
+new key, update the companion pairing.
 
 Loopback addresses work only on the machine running Doge. For an iPhone and
 physical glasses, use the [authenticated preview](docs/development.md#live-device-preview)
@@ -109,6 +150,11 @@ Start with [`AGENTS.md`](AGENTS.md) and the [documentation index](docs/INDEX.md)
 Use the nearest package's instructions when changing the G2 app or gateway.
 Write documentation in British English and add regression coverage for behaviour
 changes.
+
+For a concrete place to help, see the outstanding device checks in
+[`Backlog.md`](Backlog.md). When reporting a device issue, include the app version,
+Even App version, reproduction steps and whether it occurs in the simulator or
+on physical glasses. Keep access keys and X session data out of reports.
 
 ```sh
 npm run verify          # Formatting, repository checks, types, tests and builds

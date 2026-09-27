@@ -6,6 +6,8 @@
   `packageManager` field in [`package.json`](../package.json).
 - For physical-device testing, an Even Hub-compatible Even App paired with
   Even G2 glasses.
+- For local pairing and interaction, the Even Hub simulator installed by
+  `npm ci`. A regular browser alone does not provide the required Even SDK bridge.
 - For live X data, Safe Relay and a dedicated signed-in browser session.
 - For the live-device preview, `cloudflared` available on your path. The
   preview and production helper scripts target macOS.
@@ -16,8 +18,9 @@ retain `package-lock.json` and the existing package manager.
 ## Mock development
 
 Follow the [quick start](../README.md#quick-start) to generate a development
-bearer key, start both services and pair the companion. `npm run dev` uses
-deterministic mock data by default and requires no X connection.
+bearer key, start both services and pair the companion inside the simulator.
+The quick start sets `X_SOURCE=mock` explicitly, so an existing shell setting
+cannot select live X data. Mock mode requires no X connection.
 
 | Service                             | Local address           |
 | ----------------------------------- | ----------------------- |
